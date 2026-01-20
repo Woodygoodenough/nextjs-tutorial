@@ -2,8 +2,8 @@ import { lusitana } from '@/app/ui/fonts';
 import { LibrarySearch } from '@/components/library-search';
 import { getUserLibraryUnits } from '@/app/lib/actions/library';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { LibraryUnitCard } from '@/components/library-unit-card';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -53,25 +53,11 @@ export default async function LibraryPage({ searchParams }: Props) {
             {searchQuery && ` matching "${searchQuery}"`}
           </div>
 
-          <div className="space-y-2 mb-6">
+          <div className="mb-6">
             {units.map((unit) => (
-              <Card key={unit.unitId}>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-medium truncate">{unit.label}</h3>
-                      <div className="mt-1 flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs">
-                          {unit.matchMethod}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          Added {new Date(unit.createdAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <div key={unit.unitId} className="mb-3 last:mb-0">
+                <LibraryUnitCard unit={unit} />
+              </div>
             ))}
           </div>
 

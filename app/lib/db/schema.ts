@@ -121,6 +121,135 @@ export const userProgressRecord = pgTable(
     (t) => [primaryKey({ columns: [t.userId, t.date] })],
 );
 
+// within entry table
+export const mwDro = pgTable(
+    "mw_dro",
+    {
+      droId: uuid("dro_id").primaryKey(),
+  
+      entryUuid: uuid("entry_uuid")
+        .notNull()
+        .references(() => mwEntry.entryUuid, { onDelete: "cascade" }),
+  
+      /** dros[].drp (defined run-on phrase) */
+      drp: text("drp").notNull(),
+  
+      /** preserves MW ordering inside dros[] */
+      rank: integer("rank").notNull(),
+  
+      /** dros[].def (required by MW docs); store as-is for now */
+      def: jsonb("def").notNull(),
+  
+      fetchedAt: timestamp("fetched_at", { withTimezone: true })
+        .notNull()
+        .defaultNow(),
+    },
+    (t) => [
+      // One entry can have multiple dros; rank is stable within that entry fetch
+      uniqueIndex("mw_dro_entry_rank_unique").on(t.entryUuid, t.rank),
+      index("mw_dro_entry_idx").on(t.entryUuid),
+      index("mw_dro_drp_idx").on(t.drp),
+    ],
+  );
+  
+  // 2) Undefined Run-Ons (UROs): undefined entry words derived from headword
+export const mwUro = pgTable(
+    "mw_uro",
+    {
+        uroId: uuid("uro_id").primaryKey(),
+
+        entryUuid: uuid("entry_uuid")
+            .notNull()
+            .references(() => mwEntry.entryUuid, { onDelete: "cascade" }),
+
+        /** uros[].ure (undefined entry word) */
+        ure: text("ure").notNull(),
+
+        /** uros[].fl (functional label) - required */
+        fl: text("fl").notNull(),
+
+        /** preserves MW ordering inside uros[] */
+        rank: integer("rank").notNull(),
+
+        /** uros[].utxt (undefined run-on text section) - optional, stored as JSONB for future use */
+        utxt: jsonb("utxt"),
+
+        /** Other optional fields: ins, lbs, prs, psl, sls, vrs - stored as JSONB for future use */
+        rawJson: jsonb("raw_json"),
+
+        fetchedAt: timestamp("fetched_at", { withTimezone: true })
+            .notNull()
+            .defaultNow(),
+    },
+    (t) => [
+        // One entry can have multiple uros; rank is stable within that entry fetch
+        uniqueIndex("mw_uro_entry_rank_unique").on(t.entryUuid, t.rank),
+        index("mw_uro_entry_idx").on(t.entryUuid),
+        index("mw_uro_ure_idx").on(t.ure),
+    ],
+);
+
+  // 3) Pronunciations: can belong to entry-level OR a specific dro
+export const mwPronunciation = pgTable(
+    "mw_pronunciation",
+    {
+        pronunciationId: uuid("pronunciation_id").defaultRandom().primaryKey(),
+
+        entryUuid: uuid("entry_uuid")
+        .notNull()
+        .references(() => mwEntry.entryUuid, { onDelete: "cascade" }),
+
+        /** null => entry-level (hwi.prs or similar); non-null => dro-level (dros[].prs) */
+        droId: uuid("dro_id").references(() => mwDro.droId, { onDelete: "cascade" }),
+
+        /** prs[].mw (written pronunciation in MW format), if present */
+        mw: text("mw"),
+
+        /** prs[].l / prs[].l2 / prs[].pun (optional) */
+        l: text("l"),
+        l2: text("l2"),
+        pun: text("pun"),
+
+        /**
+         * prs[].sound.audio base filename for audio playback, if present.
+         * (ref/stat can be ignored per MW docs)
+         */
+        audioBase: text("audio_base"),
+
+        /**
+         * Needed to reconstruct URL:
+         * https://media.merriam-webster.com/audio/prons/[lang]/[country]/[format]/[subdir]/[audioBase].[format]
+         */
+        langCode: text("lang_code").notNull(),    // e.g. "en"
+        countryCode: text("country_code").notNull(), // e.g. "us"
+
+        /** preserves ordering within prs[] list */
+        rank: integer("rank").notNull(),
+
+        fetchedAt: timestamp("fetched_at", { withTimezone: true })
+        .notNull()
+        .defaultNow(),
+    },
+    (t) => [
+        // within a (entry, dro or entry-level), rank identifies pronunciation order
+        uniqueIndex("mw_pron_entry_dro_rank_unique").on(t.entryUuid, t.droId, t.rank),
+
+        index("mw_pron_entry_idx").on(t.entryUuid),
+        index("mw_pron_dro_idx").on(t.droId),
+        index("mw_pron_audio_base_idx").on(t.audioBase),
+    ],
+);
+
+
+export type InsertMwDro = InferInsertModel<typeof mwDro>;
+export type SelectMwDro = InferSelectModel<typeof mwDro>;
+
+export type InsertMwUro = InferInsertModel<typeof mwUro>;
+export type SelectMwUro = InferSelectModel<typeof mwUro>;
+  
+export type InsertMwPronunciation = InferInsertModel<typeof mwPronunciation>;
+export type SelectMwPronunciation = InferSelectModel<typeof mwPronunciation>;
+
 export type InsertMwEntry = InferInsertModel<typeof mwEntry>;
 export type InsertLexicalGroup = InferInsertModel<typeof lexicalGroup>;
 export type InsertLexicalGroupEntry = InferInsertModel<typeof lexicalGroupEntry>;

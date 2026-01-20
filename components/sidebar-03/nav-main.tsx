@@ -17,6 +17,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import type React from "react";
 import { useState } from "react";
 
@@ -36,12 +37,30 @@ export default function DashboardNavigation({ routes }: { routes: Route[] }) {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const [openCollapsible, setOpenCollapsible] = useState<string | null>(null);
+  const pathname = usePathname();
 
   return (
     <SidebarMenu>
       {routes.map((route) => {
         const isOpen = !isCollapsed && openCollapsible === route.id;
         const hasSubRoutes = !!route.subs?.length;
+        
+        // Check if this route matches the current pathname
+        const routeMatches = pathname === route.link || 
+          (route.link !== "/" && pathname.startsWith(route.link + "/"));
+        
+        // Check if any other route is a more specific match (longer path that also matches)
+        // This prevents highlighting parent routes when a child route is active
+        const hasMoreSpecificMatch = routes.some(
+          (otherRoute) => 
+            otherRoute.link !== route.link &&
+            otherRoute.link.length > route.link.length &&
+            (pathname === otherRoute.link || pathname.startsWith(otherRoute.link + "/")) &&
+            otherRoute.link.startsWith(route.link)
+        );
+        
+        // Only highlight if this route matches AND no more specific route matches
+        const isActive = routeMatches && !hasMoreSpecificMatch;
 
         return (
           <SidebarMenuItem key={route.id}>
@@ -57,10 +76,12 @@ export default function DashboardNavigation({ routes }: { routes: Route[] }) {
                   <SidebarMenuButton
                     className={cn(
                       "flex w-full items-center rounded-lg px-2 transition-colors",
-                      isOpen
-                        ? "bg-sidebar-muted text-foreground"
-                        : "text-muted-foreground hover:bg-sidebar-muted hover:text-foreground",
-                      isCollapsed && "justify-center"
+                      {
+                        "bg-sidebar-accent text-sidebar-accent-foreground font-medium": isActive,
+                        "bg-sidebar-muted text-foreground": isOpen && !isActive,
+                        "text-muted-foreground hover:bg-sidebar-muted hover:text-foreground": !isOpen && !isActive,
+                        "justify-center": isCollapsed,
+                      }
                     )}
                   >
                     {route.icon}
@@ -84,22 +105,31 @@ export default function DashboardNavigation({ routes }: { routes: Route[] }) {
                 {!isCollapsed && (
                   <CollapsibleContent>
                     <SidebarMenuSub className="my-1 ml-3.5 ">
-                      {route.subs?.map((subRoute) => (
-                        <SidebarMenuSubItem
-                          key={`${route.id}-${subRoute.title}`}
-                          className="h-auto"
-                        >
-                          <SidebarMenuSubButton asChild>
-                            <Link
-                              href={subRoute.link}
-                              prefetch={true}
-                              className="flex items-center rounded-md px-4 py-1.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-muted hover:text-foreground"
-                            >
-                              {subRoute.title}
-                            </Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
+                      {route.subs?.map((subRoute) => {
+                        const isSubActive = pathname === subRoute.link;
+                        return (
+                          <SidebarMenuSubItem
+                            key={`${route.id}-${subRoute.title}`}
+                            className="h-auto"
+                          >
+                            <SidebarMenuSubButton asChild>
+                              <Link
+                                href={subRoute.link}
+                                prefetch={true}
+                                className={cn(
+                                  "flex items-center rounded-md px-4 py-1.5 text-sm font-medium transition-colors",
+                                  {
+                                    "bg-sidebar-accent text-sidebar-accent-foreground font-medium": isSubActive,
+                                    "text-muted-foreground hover:bg-sidebar-muted hover:text-foreground": !isSubActive,
+                                  }
+                                )}
+                              >
+                                {subRoute.title}
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        );
+                      })}
                     </SidebarMenuSub>
                   </CollapsibleContent>
                 )}
@@ -110,8 +140,12 @@ export default function DashboardNavigation({ routes }: { routes: Route[] }) {
                   href={route.link}
                   prefetch={true}
                   className={cn(
-                    "flex items-center rounded-lg px-2 transition-colors text-muted-foreground hover:bg-sidebar-muted hover:text-foreground",
-                    isCollapsed && "justify-center"
+                    "flex items-center rounded-lg px-2 transition-colors",
+                    {
+                      "bg-sidebar-accent text-sidebar-accent-foreground font-medium": isActive,
+                      "text-muted-foreground hover:bg-sidebar-muted hover:text-foreground": !isActive,
+                      "justify-center": isCollapsed,
+                    }
                   )}
                 >
                   {route.icon}
