@@ -15,6 +15,7 @@ import {
   Settings,
   ChartBar,
   PowerIcon,
+  BookOpen,
 } from "lucide-react";
 import YamyLogoBook from '@/app/ui/yamy-logo-book'
 import type { Route } from "./nav-main";
@@ -59,6 +60,12 @@ const dashboardRoutes: Route[] = [
     title: "Dashboard",
     icon: <ChartBar className="size-4" />,
     link: "/dashboard",
+  },
+  {
+    id: "library",
+    title: "My Library",
+    icon: <BookOpen className="size-4" />,
+    link: "/dashboard/library",
   },
   {
     id: "settings",
