@@ -2,11 +2,15 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { authConfig } from './auth.config';
 import { z } from 'zod';
-import type { User } from '@/app/lib/definitions';
 import bcrypt from 'bcrypt';
-import postgres from 'postgres';
+import { sql } from '@/app/lib/db/client';
 
-const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
+type User = {
+    id: string
+    name: string
+    email: string
+    password: string
+}
 
 async function getUser(email: string): Promise<User | undefined> {
     try {
@@ -18,11 +22,12 @@ async function getUser(email: string): Promise<User | undefined> {
     }
 }
 
-export const { auth, signIn, signOut } = NextAuth({
+export const { handlers, auth, signIn, signOut } = NextAuth({
     ...authConfig,
     providers: [
         Credentials({
             async authorize(credentials) {
+                // notice how we use zod to validate before reaching the database
                 const parsedCredentials = z
                     .object({ email: z.string().email(), password: z.string().min(6) })
                     .safeParse(credentials);
@@ -35,7 +40,7 @@ export const { auth, signIn, signOut } = NextAuth({
 
                     if (passwordsMatch) return user;
                 }
-
+                console.log('Invalid credentials');
                 return null;
             },
         }),

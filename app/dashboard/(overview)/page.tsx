@@ -1,30 +1,33 @@
-import CardWrapper from '@/app/ui/dashboard/cards';
-import RevenueChart from '@/app/ui/dashboard/revenue-chart';
-import LatestInvoices from '@/app/ui/dashboard/latest-invoices';
+
 import { lusitana } from '@/app/ui/fonts';
-import { Suspense } from 'react';
-import { LatestInvoicesSkeleton, RevenueChartSkeleton, CardsSkeleton } from '@/app/ui/skeletons';
+import { ChartLineLabel } from '@/components/chart';
+import Stats04 from '@/components/stats-04';
+
+import { SearchWidget } from '@/components/search-widget';
 
 export default async function Page() {
-
 
     return (
         <main>
             <h1 className={`${lusitana.className} mb-4 text-xl md:text-2xl`}>
                 Dashboard
             </h1>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                <Suspense fallback={<CardsSkeleton />}>
-                    <CardWrapper />
-                </Suspense>
-            </div>
+            <Stats04 />
             <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-4 lg:grid-cols-8">
-                <Suspense fallback={<RevenueChartSkeleton />}>
-                    <RevenueChart />
-                </Suspense>
-                <Suspense fallback={<LatestInvoicesSkeleton />}>
-                    <LatestInvoices />
-                </Suspense>
+                <div className="flex w-full flex-col md:col-span-4">
+                    <h2 className={`${lusitana.className} mb-4 text-xl md:text-2xl`}>
+                        Mastery Progress
+                    </h2>
+                    <ChartLineLabel />
+                </div>
+                <div className="flex w-full flex-col md:col-span-4">
+                    <h2 className={`${lusitana.className} mb-4 text-xl md:text-2xl`}>
+                        Let's Explore!
+                    </h2>
+                    <div className="w-full">
+                        <SearchWidget />
+                    </div>
+                </div>
             </div>
         </main>
     );

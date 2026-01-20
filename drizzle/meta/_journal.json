@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1768867522442,
+      "tag": "0000_silky_speedball",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1768867748418,
+      "tag": "0001_breezy_proteus",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1768870708117,
+      "tag": "0002_famous_roulette",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1768877390477,
+      "tag": "0003_good_iron_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1768877764261,
+      "tag": "0004_rename_user_vocab_mastery_to_recent_mastery",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1768881362248,
+      "tag": "0005_complex_leopardon",
+      "breakpoints": true
+    }
+  ]
+}

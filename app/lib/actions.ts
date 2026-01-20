@@ -1,11 +1,10 @@
 'use server';
 import { z } from 'zod';
-import postgres from 'postgres';
-import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { signIn } from '@/auth';
 import { AuthError } from 'next-auth';
-const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
+import bcrypt from 'bcrypt';
+import { sql } from '@/app/lib/db/client';
 const FormSchema = z.object({
     id: z.string(),
     customerId: z.string({
@@ -20,91 +19,6 @@ const FormSchema = z.object({
     date: z.string(),
 });
 
-export type State = {
-    errors?: {
-        customerId?: string[];
-        amount?: string[];
-        status?: string[];
-    };
-    message?: string | null;
-};
-
-const CreateInvoice = FormSchema.omit({ id: true, date: true });
-const UpdateInvoice = FormSchema.omit({ id: true, date: true });
-export async function createInvoice(prevState: State, formData: FormData) {
-    const validatedFields = CreateInvoice.safeParse({
-        customerId: formData.get('customerId'),
-        amount: formData.get('amount'),
-        status: formData.get('status'),
-    });
-    // If form validation fails, return errors early. Otherwise, continue.
-    if (!validatedFields.success) {
-        return {
-            errors: validatedFields.error.flatten().fieldErrors,
-            message: 'Missing Fields. Failed to Create Invoice.',
-        };
-    }
-
-    const { customerId, amount, status } = validatedFields.data;
-    const amountInCents = amount * 100;
-    const date = new Date().toISOString().split('T')[0];
-
-    try {
-        await sql`
-        INSERT INTO invoices (customer_id, amount, status, date)
-        VALUES (${customerId}, ${amountInCents}, ${status}, ${date})
-      `;
-    } catch (error) {
-        // We'll also log the error to the console for now
-        console.error(error);
-        return {
-            message: 'Database Error: Failed to Create Invoice.',
-        };
-    }
-
-    revalidatePath('/dashboard/invoices');
-    redirect('/dashboard/invoices');
-}
-
-export async function updateInvoice(
-    id: string,
-    prevState: State,
-    formData: FormData,
-) {
-    const validatedFields = UpdateInvoice.safeParse({
-        customerId: formData.get('customerId'),
-        amount: formData.get('amount'),
-        status: formData.get('status'),
-    });
-
-    if (!validatedFields.success) {
-        return {
-            errors: validatedFields.error.flatten().fieldErrors,
-            message: 'Missing Fields. Failed to Update Invoice.',
-        };
-    }
-
-    const { customerId, amount, status } = validatedFields.data;
-    const amountInCents = amount * 100;
-
-    try {
-        await sql`
-        UPDATE invoices
-        SET customer_id = ${customerId}, amount = ${amountInCents}, status = ${status}
-        WHERE id = ${id}
-      `;
-    } catch (error) {
-        return { message: 'Database Error: Failed to Update Invoice.' };
-    }
-
-    revalidatePath('/dashboard/invoices');
-    redirect('/dashboard/invoices');
-}
-
-export async function deleteInvoice(id: string) {
-    await sql`DELETE FROM invoices WHERE id = ${id}`;
-    revalidatePath('/dashboard/invoices');
-}
 
 export async function authenticate(
     prevState: string | undefined,
@@ -120,6 +34,63 @@ export async function authenticate(
                 default:
                     return 'Something went wrong.';
             }
+        }
+        throw error;
+    }
+}
+
+const RegisterSchema = z.object({
+    name: z.string().min(1, 'Name is required.'),
+    email: z.string().email('Please enter a valid email.'),
+    password: z.string().min(8, 'Password must be at least 8 characters long.'),
+});
+
+export async function register(
+    prevState: string | undefined,
+    formData: FormData,
+) {
+    const parsed = RegisterSchema.safeParse({
+        name: formData.get('name'),
+        email: formData.get('email'),
+        password: formData.get('password'),
+    });
+
+    if (!parsed.success) {
+        const message = parsed.error.issues[0]?.message ?? 'Invalid form values.';
+        return message;
+    }
+
+    const { name, email, password } = parsed.data;
+
+    try {
+        // Ensure UUID extension exists if this is a fresh DB.
+        await sql`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`;
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await sql`
+          INSERT INTO users (name, email, password)
+          VALUES (${name}, ${email}, ${hashedPassword})
+        `;
+    } catch (error: any) {
+        // Postgres unique constraint violation
+        if (error?.code === '23505') {
+            return 'An account with that email already exists.';
+        }
+        console.error('Failed to create user:', error);
+        return 'Something went wrong creating your account.';
+    }
+
+    // Sign in immediately after successful registration.
+    try {
+        const fd = new FormData();
+        fd.set('email', email);
+        fd.set('password', password);
+        fd.set('redirectTo', '/dashboard');
+        await signIn('credentials', fd);
+    } catch (error) {
+        if (error instanceof AuthError) {
+            // If something odd happens, fall back to login.
+            redirect('/login');
         }
         throw error;
     }
