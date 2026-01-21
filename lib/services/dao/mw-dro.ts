@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
-import { mwDro } from "@/app/lib/db/schema";
-import type { SelectMwDro, InsertMwDro } from "@/app/lib/db/schema";
-import { db } from "@/app/lib/db/client";
+import { mwDro } from "@/lib/db/schema";
+import type { SelectMwDro, InsertMwDro } from "@/lib/db/schema";
+import { db } from "@/lib/db/client";
 
 /**
  * Fetch all DROs for a given entry UUID, ordered by rank.
@@ -81,3 +81,4 @@ export async function upsertDro(dro: InsertMwDro): Promise<void> {
 export async function deleteDrosByEntryUuid(entryUuid: string): Promise<void> {
     await db.delete(mwDro).where(eq(mwDro.entryUuid, entryUuid));
 }
+

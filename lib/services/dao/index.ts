@@ -10,13 +10,13 @@ export {
     fetchLexicalGroupFromFingerprint,
     upsertLookupKey,
     upsertLearningUnit,
-} from "./learning-units";
+} from "@/lib/services/dao/learning-units";
 
 // User Vocabulary
 export {
     upsertUserVocab,
     deleteUserVocabForUser,
-} from "./user-vocab";
+} from "@/lib/services/dao/user-vocab";
 
 // DRO (Defined Run-Ons)
 export {
@@ -27,7 +27,7 @@ export {
     insertDros,
     upsertDro,
     deleteDrosByEntryUuid,
-} from "./mw-dro";
+} from "@/lib/services/dao/mw-dro";
 
 // URO (Undefined Run-Ons)
 export {
@@ -38,18 +38,20 @@ export {
     insertUros,
     upsertUro,
     deleteUrosByEntryUuid,
-} from "./mw-uro";
+} from "@/lib/services/dao/mw-uro";
 
 // Pronunciations
 export {
-    fetchPronunciationsByEntryUuid,
-    fetchEntryLevelPronunciations,
+    fetchPronunciationsByOwner,
+    fetchHwiPronunciations,
     fetchPronunciationsByDroId,
+    fetchPronunciationsByUroId,
     fetchPronunciationById,
-    fetchPronunciationsByAudioBase,
+    fetchPronunciationsBySoundAudio,
     insertPronunciation,
     insertPronunciations,
     upsertPronunciation,
     deletePronunciationsByEntryUuid,
-    deletePronunciationsByDroId,
-} from "./mw-pronunciation";
+    deletePronunciationsByOwner,
+} from "@/lib/services/dao/mw-pronunciation";
+

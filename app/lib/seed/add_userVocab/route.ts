@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { deleteUserVocabForUser, upsertUserVocab } from "@/app/lib/services/dao";
+import { deleteUserVocabForUser, upsertUserVocab } from "@/lib/services/dao";
 import type { Mastery } from "@/domain/review/scheduler";
 
 const DEFAULT_USER_ID = "410544b2-4001-4271-9855-fec4b6a6442a"; // Valuable Student (initdb seed)

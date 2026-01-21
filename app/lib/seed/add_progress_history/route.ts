@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
-import { db } from "@/app/lib/db/client";
-import { userProgressRecord } from "@/app/lib/db/schema";
+import { db } from "@/lib/db/client";
+import { userProgressRecord } from "@/lib/db/schema";
 
 const DEFAULT_USER_ID = "410544b2-4001-4271-9855-fec4b6a6442a"; // Valuable Student (initdb seed)
 

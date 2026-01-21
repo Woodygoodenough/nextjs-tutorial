@@ -1,9 +1,9 @@
 "use server";
 
-import { auth } from "@/auth";
-import { db, sql } from "@/app/lib/db/client";
-import { users, learningUnit, userVocab, lookupKey, mwEntry } from "@/app/lib/db/schema";
-import { eq, and, or, ilike, count, desc } from "drizzle-orm";
+import { db, sql } from "@/lib/db/client";
+import { userVocab } from "@/lib/db/schema";
+import { eq, count } from "drizzle-orm";
+import { requireUserId } from "./require-user-id";
 
 export type LibraryUnit = {
   unitId: string;
@@ -32,23 +32,6 @@ export type WordDetail = {
   metaId: string | null;
 };
 
-async function requireUserId(): Promise<string> {
-  const session = await auth();
-  const sessionUser = session?.user as { id?: string; email?: string } | undefined;
-
-  if (sessionUser?.id) return sessionUser.id;
-  if (sessionUser?.email) {
-    const rows = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, sessionUser.email))
-      .limit(1);
-    const id = rows[0]?.id;
-    if (id) return id;
-  }
-  throw new Error("Not authenticated");
-}
-
 export async function getUserLibraryUnits(
   searchQuery: string = "",
   page: number = 1,
@@ -64,9 +47,9 @@ export async function getUserLibraryUnits(
       SELECT COUNT(DISTINCT uv.unit_id)::int as total
       FROM user_vocab uv
       INNER JOIN learning_unit lu ON uv.unit_id = lu.unit_id
-      LEFT JOIN lookup_key lk ON lu.unit_id = lk.unit_id
+      LEFT JOIN mw_stem ms ON lu.stem_id = ms.stem_id
       WHERE uv.user_id = ${userId}
-        AND (lu.label ILIKE ${`%${searchTerm}%`} OR lk.lookup_key ILIKE ${`%${searchTerm}%`})
+        AND (lu.label ILIKE ${`%${searchTerm}%`} OR ms.stem ILIKE ${`%${searchTerm}%`} OR ms.stem_norm ILIKE ${`%${searchTerm}%`})
     `;
 
     const unitsRows = await sql<Array<{
@@ -94,10 +77,10 @@ export async function getUserLibraryUnits(
         END as shortdef
       FROM user_vocab uv
       INNER JOIN learning_unit lu ON uv.unit_id = lu.unit_id
-      LEFT JOIN lookup_key lk ON lu.unit_id = lk.unit_id
+      LEFT JOIN mw_stem ms ON lu.stem_id = ms.stem_id
       LEFT JOIN mw_entry me ON lu.representative_entry_uuid = me.entry_uuid
       WHERE uv.user_id = ${userId}
-        AND (lu.label ILIKE ${`%${searchTerm}%`} OR lk.lookup_key ILIKE ${`%${searchTerm}%`})
+        AND (lu.label ILIKE ${`%${searchTerm}%`} OR ms.stem ILIKE ${`%${searchTerm}%`} OR ms.stem_norm ILIKE ${`%${searchTerm}%`})
       ORDER BY uv.last_reviewed_at DESC NULLS LAST, lu.created_at DESC
       LIMIT ${pageSize}
       OFFSET ${offset}
@@ -111,12 +94,12 @@ export async function getUserLibraryUnits(
         // Clean up shortdef: remove quotes, escape sequences, and HTML-like tags
         let shortdef = u.shortdef;
         if (shortdef) {
-          shortdef = shortdef.replace(/^"|"$/g, '').replace(/\\"/g, '"').replace(/\\n/g, ' ');
+          shortdef = shortdef.replace(/^"|"$/g, "").replace(/\\"/g, '"').replace(/\\n/g, " ");
           // Remove common MW API formatting
-          shortdef = shortdef.replace(/\[.*?\]/g, '').replace(/\{.*?\}/g, '').trim();
+          shortdef = shortdef.replace(/\[.*?\]/g, "").replace(/\{.*?\}/g, "").trim();
           // Limit length
           if (shortdef.length > 150) {
-            shortdef = shortdef.substring(0, 147) + '...';
+            shortdef = shortdef.substring(0, 147) + "...";
           }
         }
         return {
@@ -180,12 +163,12 @@ export async function getUserLibraryUnits(
         // Clean up shortdef: remove quotes, escape sequences, and HTML-like tags
         let shortdef = u.shortdef;
         if (shortdef) {
-          shortdef = shortdef.replace(/^"|"$/g, '').replace(/\\"/g, '"').replace(/\\n/g, ' ');
+          shortdef = shortdef.replace(/^"|"$/g, "").replace(/\\"/g, '"').replace(/\\n/g, " ");
           // Remove common MW API formatting
-          shortdef = shortdef.replace(/\[.*?\]/g, '').replace(/\{.*?\}/g, '').trim();
+          shortdef = shortdef.replace(/\[.*?\]/g, "").replace(/\{.*?\}/g, "").trim();
           // Limit length
           if (shortdef.length > 150) {
-            shortdef = shortdef.substring(0, 147) + '...';
+            shortdef = shortdef.substring(0, 147) + "...";
           }
         }
         return {
@@ -244,12 +227,12 @@ export async function getWordDetail(unitId: string): Promise<WordDetail | null> 
   if (rows.length === 0) return null;
 
   const u = rows[0];
-  
+
   // Clean up shortdef
   let shortdef = u.shortdef;
   if (shortdef) {
-    shortdef = shortdef.replace(/^"|"$/g, '').replace(/\\"/g, '"').replace(/\\n/g, ' ');
-    shortdef = shortdef.replace(/\[.*?\]/g, '').replace(/\{.*?\}/g, '').trim();
+    shortdef = shortdef.replace(/^"|"$/g, "").replace(/\\"/g, '"').replace(/\\n/g, " ");
+    shortdef = shortdef.replace(/\[.*?\]/g, "").replace(/\{.*?\}/g, "").trim();
   }
 
   return {
@@ -263,3 +246,4 @@ export async function getWordDetail(unitId: string): Promise<WordDetail | null> 
     metaId: u.meta_id,
   };
 }
+

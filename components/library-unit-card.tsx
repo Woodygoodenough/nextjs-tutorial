@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { getPercentageProgress } from '@/domain/review/scheduler';
 import Link from 'next/link';
 import { PronunciationButton } from '@/components/pronunciation-button';
-import type { LibraryUnit } from '@/app/lib/actions/library';
+import type { LibraryUnit } from '@/lib/actions/library';
 
 type LibraryUnitCardProps = {
   unit: LibraryUnit;

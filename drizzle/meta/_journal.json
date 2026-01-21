@@ -43,6 +43,34 @@
       "when": 1768881362248,
       "tag": "0005_complex_leopardon",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1768950000000,
+      "tag": "0006_mw_pronunciation_add_uro_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1768950001000,
+      "tag": "0007_mw_pronunciation_entry_level_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1768950002000,
+      "tag": "0008_mw_stem_and_pronunciation_polymorphic",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1768950003000,
+      "tag": "0009_create_mw_dro_mw_uro",
+      "breakpoints": true
     }
   ]
 }

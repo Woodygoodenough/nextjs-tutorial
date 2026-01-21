@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
-import { userVocab } from "@/app/lib/db/schema";
+import { userVocab } from "@/lib/db/schema";
 import { getNextReviewDate, Mastery } from "@/domain/review/scheduler";
 import { DEFAULT_REVIEW_SETTINGS } from "@/domain/review/reviewSettings";
-import { db } from "@/app/lib/db/client";
+import { db } from "@/lib/db/client";
 
 export async function upsertUserVocab(userId: string, unitId: string, progress: number, recentMastery: Mastery, lastReviewedAt: Date = new Date()): Promise<void> {
     // if progress is passed as 0, we enforce recentMastery to be null
@@ -27,3 +27,4 @@ export async function upsertUserVocab(userId: string, unitId: string, progress: 
 export async function deleteUserVocabForUser(userId: string): Promise<void> {
     await db.delete(userVocab).where(eq(userVocab.userId, userId));
 }
+

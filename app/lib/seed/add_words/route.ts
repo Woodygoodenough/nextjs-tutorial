@@ -1,6 +1,6 @@
-import { searchMW } from "@/app/lib/services/search";
-import { silentlyPersistLookupKey, persistSearchResult } from "@/app/lib/services/search";
-import { GetUnitResult } from "@/app/lib/types/commons";
+import { searchMW } from "@/lib/services/search";
+import { silentlyPersistLookupKey, persistSearchResult } from "@/lib/services/search";
+import { GetUnitResult } from "@/lib/types/commons";
 
 async function resolveSearchAndPersist(lookupKey: string): Promise<GetUnitResult> {
     const result = await searchMW(lookupKey);

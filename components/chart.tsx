@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm"
 import { auth } from "@/auth"
-import { db } from "@/app/lib/db/client"
-import { users } from "@/app/lib/db/schema"
-import { getRecentProgressRecords } from "@/app/lib/data/summary"
+import { db } from "@/lib/db/client"
+import { users } from "@/lib/db/schema"
+import { getRecentProgressRecords } from "@/lib/queries/summary"
 import { ChartLineLabelClient } from "@/components/chart-line-label-client"
 
 export async function ChartLineLabel() {

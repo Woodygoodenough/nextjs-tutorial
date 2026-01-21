@@ -3,7 +3,7 @@ import Credentials from 'next-auth/providers/credentials';
 import { authConfig } from './auth.config';
 import { z } from 'zod';
 import bcrypt from 'bcrypt';
-import { sql } from '@/app/lib/db/client';
+import { sql } from '@/lib/db/client';
 
 type User = {
     id: string

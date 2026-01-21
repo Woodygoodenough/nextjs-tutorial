@@ -20,7 +20,7 @@ import {
   searchAndResolve,
   type SearchWidgetResolved,
   type SearchWidgetResult,
-} from "@/app/lib/search-widget-actions";
+} from "@/lib/actions/search-widget";
 
 type Status = "idle" | "suggesting" | "loading" | "success" | "empty" | "error";
 

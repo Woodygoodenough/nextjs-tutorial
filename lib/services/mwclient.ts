@@ -1,4 +1,4 @@
-import type { InsertMwEntry } from "@/app/lib/db/schema";
+import type { InsertMwEntry } from "@/lib/db/schema";
 export type MWDictionary = "collegiate" | "learners" | "medical" | "intermediate" | "elementary";
 
 export type MWRawResponse = unknown;
@@ -154,3 +154,4 @@ export function createMWClientFromEnv(): MWClient {
     const dictionary = (process.env.MW_DICTIONARY as MWDictionary | undefined) ?? "collegiate";
     return new MWClient({ apiKey, dictionary });
 }
+

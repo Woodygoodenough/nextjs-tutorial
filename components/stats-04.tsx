@@ -1,6 +1,6 @@
-import { getReviewDue, getUserAverageProgress, getUserTotalVocab } from "@/app/lib/data/summary";
-import { db } from "@/app/lib/db/client";
-import { users } from "@/app/lib/db/schema";
+import { getReviewDue, getUserAverageProgress, getUserTotalVocab } from "@/lib/queries/summary";
+import { db } from "@/lib/db/client";
+import { users } from "@/lib/db/schema";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";

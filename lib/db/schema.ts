@@ -6,6 +6,7 @@ import {
     timestamp,
     date,
     integer,
+    boolean,
     primaryKey,
     uniqueIndex,
     index,
@@ -31,6 +32,55 @@ export const mwEntry = pgTable("mw_entry", {
     rawJson: jsonb("raw_json").notNull(),
     fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Headword info (hwi) (1 row per entry)
+export const mwHwi = pgTable("mw_hwi", {
+    entryUuid: uuid("entry_uuid")
+        .primaryKey()
+        .references(() => mwEntry.entryUuid, { onDelete: "cascade" }),
+    hw: text("hw").notNull(),
+});
+
+// Alternate headwords (ahws) (0..n per entry)
+export const mwAhw = pgTable(
+    "mw_ahw",
+    {
+        ahwId: uuid("ahw_id").defaultRandom().primaryKey(),
+        entryUuid: uuid("entry_uuid")
+            .notNull()
+            .references(() => mwEntry.entryUuid, { onDelete: "cascade" }),
+        hw: text("hw").notNull(),
+        rank: integer("rank").notNull(),
+    },
+    (t) => [
+        uniqueIndex("mw_ahw_entry_rank_unique").on(t.entryUuid, t.rank),
+        index("mw_ahw_entry_idx").on(t.entryUuid),
+        index("mw_ahw_hw_idx").on(t.hw),
+    ],
+);
+
+// Searchable stems (meta.stems) (1 row per stems[] item)
+export const mwStem = pgTable(
+    "mw_stem",
+    {
+        stemId: uuid("stem_id").defaultRandom().primaryKey(),
+        entryUuid: uuid("entry_uuid")
+            .notNull()
+            .references(() => mwEntry.entryUuid, { onDelete: "cascade" }),
+        stem: text("stem").notNull(),
+        stemNorm: text("stem_norm").notNull(),
+        anchorKind: text("anchor_kind").notNull(), // HWI | AHW | DRO | URO | VRS | INS | UNKNOWN
+        anchorId: text("anchor_id"), // polymorphic reference (uuid as text or path token)
+        fallbackWarning: boolean("fallback_warning").notNull().default(false),
+        rank: integer("rank").notNull(),
+        fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+    },
+    (t) => [
+        uniqueIndex("mw_stem_entry_rank_unique").on(t.entryUuid, t.rank),
+        index("mw_stem_norm_idx").on(t.stemNorm),
+        index("mw_stem_entry_idx").on(t.entryUuid),
+    ],
+);
 
 export const lexicalGroup = pgTable(
     "lexical_group",
@@ -61,6 +111,9 @@ export const learningUnit = pgTable(
     {
         unitId: uuid("unit_id").primaryKey(),
         label: text("label").notNull(),
+        stemId: uuid("stem_id")
+            .notNull()
+            .references(() => mwStem.stemId, { onDelete: "restrict" }),
         groupId: uuid("group_id")
             .notNull()
             .references(() => lexicalGroup.groupId, { onDelete: "cascade" }),
@@ -189,54 +242,81 @@ export const mwUro = pgTable(
     ],
 );
 
-  // 3) Pronunciations: can belong to entry-level OR a specific dro
+// Variants (vrs) - can occur in many places
+export const mwVr = pgTable(
+    "mw_vr",
+    {
+        vrId: uuid("vr_id").defaultRandom().primaryKey(),
+        entryUuid: uuid("entry_uuid")
+            .notNull()
+            .references(() => mwEntry.entryUuid, { onDelete: "cascade" }),
+        va: text("va").notNull(),
+        vl: text("vl"),
+        rank: integer("rank").notNull(),
+        scopeType: text("scope_type").notNull(), // ENTRY | DRO | URO | ...
+        scopeRef: text("scope_ref"), // JSONPath-ish string (until we model sense tables)
+        fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+    },
+    (t) => [
+        index("mw_vr_entry_idx").on(t.entryUuid),
+        index("mw_vr_va_idx").on(t.va),
+        index("mw_vr_scope_idx").on(t.scopeType, t.scopeRef),
+    ],
+);
+
+// Inflections (ins) - can occur in many places
+export const mwIn = pgTable(
+    "mw_in",
+    {
+        inId: uuid("in_id").defaultRandom().primaryKey(),
+        entryUuid: uuid("entry_uuid")
+            .notNull()
+            .references(() => mwEntry.entryUuid, { onDelete: "cascade" }),
+        inflection: text("if"), // ins[].if
+        ifc: text("ifc"), // ins[].ifc
+        il: text("il"), // ins[].il
+        rank: integer("rank").notNull(),
+        scopeType: text("scope_type").notNull(),
+        scopeRef: text("scope_ref"),
+        fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+    },
+    (t) => [
+        index("mw_in_entry_idx").on(t.entryUuid),
+        index("mw_in_if_idx").on(t.inflection),
+        index("mw_in_ifc_idx").on(t.ifc),
+        index("mw_in_scope_idx").on(t.scopeType, t.scopeRef),
+    ],
+);
+
+// Pronunciations (prs) - polymorphic owner model
 export const mwPronunciation = pgTable(
     "mw_pronunciation",
     {
-        pronunciationId: uuid("pronunciation_id").defaultRandom().primaryKey(),
-
+        prId: uuid("pr_id").defaultRandom().primaryKey(),
         entryUuid: uuid("entry_uuid")
-        .notNull()
-        .references(() => mwEntry.entryUuid, { onDelete: "cascade" }),
+            .notNull()
+            .references(() => mwEntry.entryUuid, { onDelete: "cascade" }),
 
-        /** null => entry-level (hwi.prs or similar); non-null => dro-level (dros[].prs) */
-        droId: uuid("dro_id").references(() => mwDro.droId, { onDelete: "cascade" }),
+        ownerType: text("owner_type").notNull(), // HWI | AHW | DRO | URO | VRS | INS | ...
+        ownerId: text("owner_id").notNull(), // uuid as text, or path token for sense-level
 
-        /** prs[].mw (written pronunciation in MW format), if present */
         mw: text("mw"),
-
-        /** prs[].l / prs[].l2 / prs[].pun (optional) */
+        pun: text("pun"),
         l: text("l"),
         l2: text("l2"),
-        pun: text("pun"),
 
-        /**
-         * prs[].sound.audio base filename for audio playback, if present.
-         * (ref/stat can be ignored per MW docs)
-         */
-        audioBase: text("audio_base"),
+        soundAudio: text("sound_audio"),
+        soundRef: text("sound_ref"),
+        soundStat: text("sound_stat"),
 
-        /**
-         * Needed to reconstruct URL:
-         * https://media.merriam-webster.com/audio/prons/[lang]/[country]/[format]/[subdir]/[audioBase].[format]
-         */
-        langCode: text("lang_code").notNull(),    // e.g. "en"
-        countryCode: text("country_code").notNull(), // e.g. "us"
-
-        /** preserves ordering within prs[] list */
         rank: integer("rank").notNull(),
-
-        fetchedAt: timestamp("fetched_at", { withTimezone: true })
-        .notNull()
-        .defaultNow(),
+        fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
     },
     (t) => [
-        // within a (entry, dro or entry-level), rank identifies pronunciation order
-        uniqueIndex("mw_pron_entry_dro_rank_unique").on(t.entryUuid, t.droId, t.rank),
-
+        uniqueIndex("mw_pron_owner_rank_unique").on(t.ownerType, t.ownerId, t.rank),
+        index("mw_pron_owner_idx").on(t.ownerType, t.ownerId),
         index("mw_pron_entry_idx").on(t.entryUuid),
-        index("mw_pron_dro_idx").on(t.droId),
-        index("mw_pron_audio_base_idx").on(t.audioBase),
+        index("mw_pron_sound_audio_idx").on(t.soundAudio),
     ],
 );
 
@@ -249,6 +329,21 @@ export type SelectMwUro = InferSelectModel<typeof mwUro>;
   
 export type InsertMwPronunciation = InferInsertModel<typeof mwPronunciation>;
 export type SelectMwPronunciation = InferSelectModel<typeof mwPronunciation>;
+
+export type InsertMwStem = InferInsertModel<typeof mwStem>;
+export type SelectMwStem = InferSelectModel<typeof mwStem>;
+
+export type InsertMwHwi = InferInsertModel<typeof mwHwi>;
+export type SelectMwHwi = InferSelectModel<typeof mwHwi>;
+
+export type InsertMwAhw = InferInsertModel<typeof mwAhw>;
+export type SelectMwAhw = InferSelectModel<typeof mwAhw>;
+
+export type InsertMwVr = InferInsertModel<typeof mwVr>;
+export type SelectMwVr = InferSelectModel<typeof mwVr>;
+
+export type InsertMwIn = InferInsertModel<typeof mwIn>;
+export type SelectMwIn = InferSelectModel<typeof mwIn>;
 
 export type InsertMwEntry = InferInsertModel<typeof mwEntry>;
 export type InsertLexicalGroup = InferInsertModel<typeof lexicalGroup>;
@@ -267,3 +362,4 @@ export type SelectLearningUnit = InferSelectModel<typeof learningUnit>;
 export type SelectLookupKey = InferSelectModel<typeof lookupKey>;
 export type SelectUserVocab = InferSelectModel<typeof userVocab>;
 export type SelectUserProgressRecord = InferSelectModel<typeof userProgressRecord>;
+

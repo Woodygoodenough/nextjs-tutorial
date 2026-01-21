@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import Link from "next/link";
 import { useActionState } from "react";
-import { register } from "@/app/lib/actions";
+import { register } from "@/lib/actions/auth";
 import { ExclamationCircleIcon } from "@heroicons/react/24/outline";
 
 const SignUp = () => {

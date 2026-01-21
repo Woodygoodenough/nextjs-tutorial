@@ -1,11 +1,20 @@
-import { InsertMwEntry, InsertLexicalGroup, InsertLexicalGroupEntry, InsertLearningUnit } from "@/app/lib/db/schema";
-import { createMWClientFromEnv, parseEntries } from "@/app/lib/services/mwclient";
-import { fetchLearningUnitFromLookupKey, fetchLearningUnitFromLabelAndFingerprint, upsertLookupKey, upsertLearningUnit, fetchLexicalGroupFromFingerprint, upsertUserVocab } from "@/app/lib/services/dao";
+import { InsertMwEntry, InsertLexicalGroup, InsertLexicalGroupEntry, InsertLearningUnit } from "@/lib/db/schema";
+import { createMWClientFromEnv, parseEntries } from "@/lib/services/mwclient";
+import {
+    fetchLearningUnitFromLookupKey,
+    fetchLearningUnitFromLabelAndFingerprint,
+    upsertLookupKey,
+    upsertLearningUnit,
+    fetchLexicalGroupFromFingerprint,
+    upsertUserVocab,
+} from "@/lib/services/dao";
 import { createHash, randomUUID } from "crypto";
-import { GetUnitResult } from "@/app/lib/types/commons";
+import { GetUnitResult } from "@/lib/types/commons";
 
 function normForCompare(s: string): string {
-    return s.normalize("NFC").trim();
+    // Case-insensitive normalization (China === china).
+    // Strip MW formatting markers like '*' so `con*tex*tu*al` matches `contextual`.
+    return s.replace(/\*/g, "").normalize("NFC").trim().toLowerCase();
 }
 
 function fingerprintFromUuids(entryUuids: string[]): string {
@@ -24,6 +33,7 @@ function pickRepresentation(
             label: entry.headwordRaw,
             representativeEntryUuid: entry.entryUuid,
             matchMethod: "HEADWORD",
+            stemId: randomUUID(),
             fallbackWarning: false,
         };
     }
@@ -37,6 +47,7 @@ function pickRepresentation(
             label: matchedStem,
             representativeEntryUuid: entry.entryUuid,
             matchMethod: "STEM",
+            stemId: randomUUID(),
             fallbackWarning: false,
         };
     }
@@ -46,6 +57,7 @@ function pickRepresentation(
         label: entry.headwordRaw,
         representativeEntryUuid: entry.entryUuid,
         matchMethod: "FALLBACK",
+        stemId: randomUUID(),
         fallbackWarning: true,
     };
 }
@@ -63,6 +75,7 @@ async function getLearningUnit(entries: Array<InsertMwEntry>, lookupKeyNorm: str
         }
         const newUnit: InsertLearningUnit = {
             unitId: randomUUID(),
+            stemId: rep.stemId,
             groupId: existingLexicalGroup.groupId,
             label: rep.label,
             representativeEntryUuid: rep.representativeEntryUuid,
@@ -76,6 +89,7 @@ async function getLearningUnit(entries: Array<InsertMwEntry>, lookupKeyNorm: str
 
     const newUnit: InsertLearningUnit = {
         unitId: randomUUID(),
+        stemId: rep.stemId,
         groupId: newGroupId,
         label: rep.label,
         representativeEntryUuid: rep.representativeEntryUuid,
@@ -132,3 +146,4 @@ export async function persistSearchResult(result: GetUnitResult): Promise<void> 
 export async function addToUserVocab(userId: string, unitId: string): Promise<void> {
     await upsertUserVocab(userId, unitId, 0, null);
 }
+

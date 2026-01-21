@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import { useActionState } from 'react';
-import { authenticate } from '@/app/lib/actions';
+import { authenticate } from '@/lib/actions/auth';
 import { useSearchParams } from 'next/navigation';
 import { ExclamationCircleIcon } from '@heroicons/react/24/outline';
 

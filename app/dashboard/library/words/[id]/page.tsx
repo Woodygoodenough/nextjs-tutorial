@@ -1,5 +1,5 @@
 import { lusitana } from '@/app/ui/fonts';
-import { getWordDetail } from '@/app/lib/actions/library';
+import { getWordDetail } from '@/lib/actions/library';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

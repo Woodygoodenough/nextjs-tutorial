@@ -1,6 +1,6 @@
 import { lusitana } from '@/app/ui/fonts';
 import { LibrarySearch } from '@/components/library-search';
-import { getUserLibraryUnits } from '@/app/lib/actions/library';
+import { getUserLibraryUnits } from '@/lib/actions/library';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LibraryUnitCard } from '@/components/library-unit-card';

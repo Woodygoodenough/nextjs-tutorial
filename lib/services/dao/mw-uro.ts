@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
-import { mwUro } from "@/app/lib/db/schema";
-import type { SelectMwUro, InsertMwUro } from "@/app/lib/db/schema";
-import { db } from "@/app/lib/db/client";
+import { mwUro } from "@/lib/db/schema";
+import type { SelectMwUro, InsertMwUro } from "@/lib/db/schema";
+import { db } from "@/lib/db/client";
 
 /**
  * Fetch all UROs (undefined run-ons) for a given entry UUID, ordered by rank.
@@ -83,3 +83,4 @@ export async function upsertUro(uro: InsertMwUro): Promise<void> {
 export async function deleteUrosByEntryUuid(entryUuid: string): Promise<void> {
     await db.delete(mwUro).where(eq(mwUro.entryUuid, entryUuid));
 }
+

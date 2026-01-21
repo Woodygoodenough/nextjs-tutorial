@@ -1,12 +1,10 @@
 "use server";
 
-import { auth } from "@/auth";
-import { db, sql } from "@/app/lib/db/client";
-import { users } from "@/app/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { upsertUserVocab } from "@/app/lib/services/dao";
-import { persistSearchResult, searchMW, silentlyPersistLookupKey } from "@/app/lib/services/search";
+import { sql } from "@/lib/db/client";
+import { upsertUserVocab } from "@/lib/services/dao";
+import { persistSearchResult, searchMW, silentlyPersistLookupKey } from "@/lib/services/search";
 import type { Mastery } from "@/domain/review/scheduler";
+import { requireUserId } from "@/lib/actions/require-user-id";
 
 export type SearchWidgetResult = {
   unitId: string;
@@ -24,23 +22,6 @@ export type SearchWidgetResolved = SearchWidgetResult & {
   entries: Array<SearchWidgetEntry>;
   inLibrary: boolean;
 };
-
-async function requireUserId(): Promise<string> {
-  const session = await auth();
-  const sessionUser = session?.user as { id?: string; email?: string } | undefined;
-
-  if (sessionUser?.id) return sessionUser.id;
-  if (sessionUser?.email) {
-    const rows = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, sessionUser.email))
-      .limit(1);
-    const id = rows[0]?.id;
-    if (id) return id;
-  }
-  throw new Error("Not authenticated");
-}
 
 function norm(s: string): string {
   return s.normalize("NFC").trim().toLowerCase();
@@ -62,8 +43,8 @@ export async function searchExistingUnits(query: string): Promise<Array<SearchWi
       lu.match_method as "matchMethod",
       lu.created_at as "createdAt"
     from learning_unit lu
-    left join lookup_key lk on lk.unit_id = lu.unit_id
-    where (lu.label ilike ${like} or lk.lookup_key ilike ${like})
+    left join mw_stem ms on ms.stem_id = lu.stem_id
+    where (lu.label ilike ${like} or ms.stem ilike ${like} or ms.stem_norm ilike ${like})
     order by lu.created_at desc
     limit 25;
   `;
