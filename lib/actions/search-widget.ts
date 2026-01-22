@@ -2,7 +2,7 @@
 
 import { sql } from "@/lib/db/client";
 import { upsertUserVocab } from "@/lib/services/dao";
-import { persistSearchResult, searchMW, silentlyPersistLookupKey } from "@/lib/services/search";
+import { persistSearchResult, searchMW } from "@/lib/services/search";
 import type { Mastery } from "@/domain/review/scheduler";
 import { requireUserId } from "@/lib/actions/require-user-id";
 
@@ -22,6 +22,10 @@ export type SearchWidgetResolved = SearchWidgetResult & {
   entries: Array<SearchWidgetEntry>;
   inLibrary: boolean;
 };
+
+export type SearchAndResolveResult =
+  | { kind: "resolved"; resolved: SearchWidgetResolved }
+  | { kind: "candidates"; candidates: Array<SearchWidgetResult> };
 
 function norm(s: string): string {
   return s.normalize("NFC").trim().toLowerCase();
@@ -146,15 +150,24 @@ export async function resolveExistingUnit(unitId: string): Promise<SearchWidgetR
   };
 }
 
-export async function searchAndResolve(query: string): Promise<SearchWidgetResolved> {
+export async function searchAndResolve(query: string): Promise<SearchAndResolveResult> {
   const userId = await requireUserId();
 
   const result = await searchMW(query);
-  await silentlyPersistLookupKey(result);
   await persistSearchResult(result);
 
   if (result.status === "none") {
     throw new Error(result.reason);
+  }
+  if (result.status === "candidates") {
+    return {
+      kind: "candidates",
+      candidates: result.candidates.map((u) => ({
+        unitId: u.unitId,
+        label: u.label,
+        matchMethod: u.matchMethod ?? "UNKNOWN",
+      })),
+    };
   }
 
   const unitId = result.unit.unitId;
@@ -164,6 +177,6 @@ export async function searchAndResolve(query: string): Promise<SearchWidgetResol
   const entries = await fetchTopEntriesForUnit(unitId);
   const inLibrary = await isInUserLibrary(userId, unitId);
 
-  return { unitId, label, matchMethod, entries, inLibrary };
+  return { kind: "resolved", resolved: { unitId, label, matchMethod, entries, inLibrary } };
 }
 

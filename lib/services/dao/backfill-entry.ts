@@ -15,33 +15,8 @@ import {
   mwUro,
   mwVr,
 } from "@/lib/db/schema";
-
-function normKey(s: string): string {
-  // Strip MW formatting markers like '*' so `con*tex*tu*al` matches `contextual`.
-  return s.replace(/\*/g, "").normalize("NFC").trim().toLowerCase();
-}
-
-function scopeFromPath(path: string): string {
-  if (path.includes(".dros[")) return "DRO";
-  if (path.includes(".uros[")) return "URO";
-  return "ENTRY";
-}
-
-function* walkJson(value: unknown, path: string = "$"): Generator<{ path: string; value: any }> {
-  if (Array.isArray(value)) {
-    for (let i = 0; i < value.length; i++) {
-      yield* walkJson(value[i], `${path}[${i}]`);
-    }
-    return;
-  }
-  if (value && typeof value === "object") {
-    const obj = value as Record<string, unknown>;
-    yield { path, value: obj };
-    for (const [k, v] of Object.entries(obj)) {
-      yield* walkJson(v, `${path}.${k}`);
-    }
-  }
-}
+import { morphBaseCandidates } from "@/lib/services/dao/stem-morph";
+import { extractVariantsAndInflections, extractPronunciationsFromPrs, normKey } from "@/lib/services/dao/mw-extract";
 
 type EntrySnapshot = {
   entryUuid: string;
@@ -71,9 +46,11 @@ function extractAhws(entry: EntrySnapshot) {
   if (!Array.isArray(ahws)) return [];
   return ahws
     .map((a: any, rank: number) => ({
+      ahwId: randomUUID(),
       entryUuid: entry.entryUuid,
       hw: typeof a?.hw === "string" ? a.hw.trim() : "",
       rank,
+      _prs: a?.prs,
     }))
     .filter((a: any) => a.hw);
 }
@@ -112,99 +89,43 @@ function extractUros(entry: EntrySnapshot) {
     .filter((u: any) => u.ure && u.fl);
 }
 
-function extractVariantsAndInflections(entry: EntrySnapshot) {
-  const vrs: any[] = [];
-  const ins: any[] = [];
-
-  for (const node of walkJson(entry.rawJson)) {
-    const obj = node.value as any;
-
-    if (Array.isArray(obj?.vrs)) {
-      const scopeType = scopeFromPath(node.path);
-      obj.vrs.forEach((vr: any, rank: number) => {
-        const va = typeof vr?.va === "string" ? vr.va.trim() : "";
-        if (!va) return;
-        vrs.push({
-          vrId: randomUUID(),
-          entryUuid: entry.entryUuid,
-          va,
-          vl: typeof vr?.vl === "string" ? vr.vl : null,
-          rank,
-          scopeType,
-          scopeRef: node.path,
-          fetchedAt: entry.fetchedAt,
-        });
-      });
-    }
-
-    if (Array.isArray(obj?.ins)) {
-      const scopeType = scopeFromPath(node.path);
-      obj.ins.forEach((inf: any, rank: number) => {
-        const ifText = typeof inf?.if === "string" ? inf.if.trim() : "";
-        const ifc = typeof inf?.ifc === "string" ? inf.ifc.trim() : "";
-        const il = typeof inf?.il === "string" ? inf.il : null;
-        if (!ifText && !ifc) return;
-        ins.push({
-          inId: randomUUID(),
-          entryUuid: entry.entryUuid,
-          inflection: ifText || null,
-          ifc: ifc || null,
-          il,
-          rank,
-          scopeType,
-          scopeRef: node.path,
-          fetchedAt: entry.fetchedAt,
-        });
-      });
-    }
-  }
-
-  return { vrs, ins };
-}
-
 function extractPronunciations(
   entry: EntrySnapshot,
   droByRank: Map<number, string>,
   uroByRank: Map<number, string>,
+  ahwRows: any[],
+  vrRows: any[],
+  inRows: any[],
 ) {
-  const out: Array<{
-    entryUuid: string;
-    ownerType: string;
-    ownerId: string;
-    mw: string | null;
-    pun: string | null;
-    l: string | null;
-    l2: string | null;
-    soundAudio: string | null;
-    soundRef: string | null;
-    soundStat: string | null;
-    rank: number;
-    fetchedAt: Date;
-  }> = [];
+  const out: any[] = [];
 
   const raw = entry.rawJson as any;
 
   const hwiPrs = raw?.hwi?.prs;
-  if (Array.isArray(hwiPrs)) {
-    hwiPrs.forEach((p: any, rank: number) => {
-      const mw = typeof p?.mw === "string" ? p.mw : null;
-      const soundAudio = typeof p?.sound?.audio === "string" ? p.sound.audio : null;
-      if (!mw && !soundAudio) return;
-      out.push({
-        entryUuid: entry.entryUuid,
-        ownerType: "HWI",
-        ownerId: entry.entryUuid,
-        mw,
-        pun: typeof p?.pun === "string" ? p.pun : null,
-        l: typeof p?.l === "string" ? p.l : null,
-        l2: typeof p?.l2 === "string" ? p.l2 : null,
-        soundAudio,
-        soundRef: typeof p?.sound?.ref === "string" ? p.sound.ref : null,
-        soundStat: typeof p?.sound?.stat === "string" ? p.sound.stat : null,
-        rank,
-        fetchedAt: entry.fetchedAt,
-      });
-    });
+  out.push(
+    ...extractPronunciationsFromPrs({
+      entryUuid: entry.entryUuid,
+      ownerType: "HWI",
+      ownerId: entry.entryUuid,
+      prs: hwiPrs,
+      fetchedAt: entry.fetchedAt,
+    }),
+  );
+
+  // AHW prs
+  for (const a of ahwRows) {
+    const prs = a._prs;
+    if (Array.isArray(prs)) {
+      out.push(
+        ...extractPronunciationsFromPrs({
+          entryUuid: entry.entryUuid,
+          ownerType: "AHW",
+          ownerId: a.ahwId,
+          prs,
+          fetchedAt: entry.fetchedAt,
+        }),
+      );
+    }
   }
 
   const dros = raw?.dros;
@@ -213,26 +134,15 @@ function extractPronunciations(
       const ownerId = droByRank.get(droRank);
       if (!ownerId) return;
       const prs = d?.prs;
-      if (!Array.isArray(prs)) return;
-      prs.forEach((p: any, rank: number) => {
-        const mw = typeof p?.mw === "string" ? p.mw : null;
-        const soundAudio = typeof p?.sound?.audio === "string" ? p.sound.audio : null;
-        if (!mw && !soundAudio) return;
-        out.push({
+      out.push(
+        ...extractPronunciationsFromPrs({
           entryUuid: entry.entryUuid,
           ownerType: "DRO",
           ownerId,
-          mw,
-          pun: typeof p?.pun === "string" ? p.pun : null,
-          l: typeof p?.l === "string" ? p.l : null,
-          l2: typeof p?.l2 === "string" ? p.l2 : null,
-          soundAudio,
-          soundRef: typeof p?.sound?.ref === "string" ? p.sound.ref : null,
-          soundStat: typeof p?.sound?.stat === "string" ? p.sound.stat : null,
-          rank,
+          prs,
           fetchedAt: entry.fetchedAt,
-        });
-      });
+        }),
+      );
     });
   }
 
@@ -242,33 +152,32 @@ function extractPronunciations(
       const ownerId = uroByRank.get(uroRank);
       if (!ownerId) return;
       const prs = u?.prs;
-      if (!Array.isArray(prs)) return;
-      prs.forEach((p: any, rank: number) => {
-        const mw = typeof p?.mw === "string" ? p.mw : null;
-        const soundAudio = typeof p?.sound?.audio === "string" ? p.sound.audio : null;
-        if (!mw && !soundAudio) return;
-        out.push({
+      out.push(
+        ...extractPronunciationsFromPrs({
           entryUuid: entry.entryUuid,
           ownerType: "URO",
           ownerId,
-          mw,
-          pun: typeof p?.pun === "string" ? p.pun : null,
-          l: typeof p?.l === "string" ? p.l : null,
-          l2: typeof p?.l2 === "string" ? p.l2 : null,
-          soundAudio,
-          soundRef: typeof p?.sound?.ref === "string" ? p.sound.ref : null,
-          soundStat: typeof p?.sound?.stat === "string" ? p.sound.stat : null,
-          rank,
+          prs,
           fetchedAt: entry.fetchedAt,
-        });
-      });
+        }),
+      );
     });
+  }
+
+  // VRS/INS prs were extracted while walking raw_json (attached to generated vr_id/in_id)
+  for (const v of vrRows) {
+    // no-op; prs already included in extraction phase via prRows
+    void v;
+  }
+  for (const i of inRows) {
+    void i;
   }
 
   return out;
 }
 
 function resolveStemAnchors(entry: EntrySnapshot, droRows: any[], uroRows: any[], vrRows: any[], inRows: any[], ahwRows: any[]) {
+  const stemNormSet = new Set(entry.stems.map(normKey));
   const droByNorm = new Map<string, { kind: string; id: string }>();
   for (const d of droRows) droByNorm.set(normKey(d.drp), { kind: "DRO", id: d.droId });
   const uroByNorm = new Map<string, { kind: string; id: string }>();
@@ -285,13 +194,26 @@ function resolveStemAnchors(entry: EntrySnapshot, droRows: any[], uroRows: any[]
 
   const hwiHwNorm = normKey((entry.rawJson as any)?.hwi?.hw ?? "");
 
-  return (stemNorm: string) =>
-    droByNorm.get(stemNorm) ??
-    uroByNorm.get(stemNorm) ??
-    vrByNorm.get(stemNorm) ??
-    inByNorm.get(stemNorm) ??
-    ahwByNorm.get(stemNorm) ??
-    (hwiHwNorm === stemNorm ? { kind: "HWI", id: entry.entryUuid } : undefined);
+  const resolve = (k: string) =>
+    droByNorm.get(k) ??
+    uroByNorm.get(k) ??
+    vrByNorm.get(k) ??
+    inByNorm.get(k) ??
+    ahwByNorm.get(k) ??
+    (hwiHwNorm === k ? { kind: "HWI", id: entry.entryUuid } : undefined);
+
+  return (stemNorm: string) => {
+    const direct = resolve(stemNorm);
+    if (direct) return direct;
+
+    for (const cand of morphBaseCandidates(stemNorm)) {
+      if (!stemNormSet.has(cand)) continue;
+      const a = resolve(cand);
+      if (a) return a;
+    }
+
+    return undefined;
+  };
 }
 
 export async function backfillEntrySemantics(entryUuid: string): Promise<void> {
@@ -322,11 +244,17 @@ export async function backfillEntrySemantics(entryUuid: string): Promise<void> {
     // Replace AHW/VRS/INS for this entry (no FKs from other tables)
     await tx.delete(mwAhw).where(eq(mwAhw.entryUuid, entry.entryUuid));
     const ahws = extractAhws(entry);
-    if (ahws.length) await tx.insert(mwAhw).values(ahws).onConflictDoNothing();
+    if (ahws.length) {
+      await tx.insert(mwAhw).values(ahws.map(({ _prs, ...row }: any) => row)).onConflictDoNothing();
+    }
 
     await tx.delete(mwVr).where(eq(mwVr.entryUuid, entry.entryUuid));
     await tx.delete(mwIn).where(eq(mwIn.entryUuid, entry.entryUuid));
-    const { vrs, ins } = extractVariantsAndInflections(entry);
+    const { vrs, ins, prRows: vrInPrRows } = extractVariantsAndInflections({
+      entryUuid: entry.entryUuid,
+      rawJson: entry.rawJson,
+      fetchedAt: entry.fetchedAt,
+    });
     if (vrs.length) await tx.insert(mwVr).values(vrs).onConflictDoNothing();
     if (ins.length) await tx.insert(mwIn).values(ins).onConflictDoNothing();
 
@@ -345,8 +273,9 @@ export async function backfillEntrySemantics(entryUuid: string): Promise<void> {
 
     // Rebuild pronunciations for this entry
     await tx.delete(mwPronunciation).where(eq(mwPronunciation.entryUuid, entry.entryUuid));
-    const prs = extractPronunciations(entry, droByRank, uroByRank);
-    if (prs.length) await tx.insert(mwPronunciation).values(prs).onConflictDoNothing();
+    const prs = extractPronunciations(entry, droByRank, uroByRank, ahws as any[], vrs as any[], ins as any[]);
+    const allPrs = prs.concat(vrInPrRows);
+    if (allPrs.length) await tx.insert(mwPronunciation).values(allPrs).onConflictDoNothing();
 
     // Upsert stems (preserve stem_id so learning_unit FK stays valid)
     const resolveAnchor = resolveStemAnchors(entry, dros, uros, vrs, ins, ahws);

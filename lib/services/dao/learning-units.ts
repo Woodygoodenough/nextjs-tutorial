@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import {
     lexicalGroup,
     learningUnit,
@@ -17,165 +17,19 @@ import type { SelectLearningUnit, SelectLexicalGroup } from "@/lib/db/schema";
 import { GetUnitResult } from "@/lib/types/commons";
 import { db } from "@/lib/db/client";
 import { randomUUID } from "crypto";
+import { morphBaseCandidates } from "@/lib/services/dao/stem-morph";
+import { extractPronunciationsFromPrs, extractVariantsAndInflections, normKey } from "@/lib/services/dao/mw-extract";
 
-function normKey(s: string): string {
-    // Case-insensitive normalization (China === china).
-    // Also strip MW formatting markers like '*' so `con*tex*tu*al` matches `contextual`.
-    return s.replace(/\*/g, "").normalize("NFC").trim().toLowerCase();
-}
-
-function extractHwiPronunciations(entry: { entryUuid: string; rawJson: unknown; fetchedAt: Date }) {
-    const e = entry.rawJson as any;
-    const prs = e?.hwi?.prs;
-    if (!Array.isArray(prs)) return [];
-
-    const out: Array<{
-        entryUuid: string;
-        ownerType: string;
-        ownerId: string;
-        mw: string | null;
-        l: string | null;
-        l2: string | null;
-        pun: string | null;
-        soundAudio: string | null;
-        soundRef: string | null;
-        soundStat: string | null;
-        rank: number;
-        fetchedAt: Date;
-    }> = [];
-
-    for (let i = 0; i < prs.length; i++) {
-        const p = prs[i] as any;
-        const mw = typeof p?.mw === "string" ? p.mw : null;
-        const l = typeof p?.l === "string" ? p.l : null;
-        const l2 = typeof p?.l2 === "string" ? p.l2 : null;
-        const pun = typeof p?.pun === "string" ? p.pun : null;
-        const soundAudio = typeof p?.sound?.audio === "string" ? p.sound.audio : null;
-        const soundRef = typeof p?.sound?.ref === "string" ? p.sound.ref : null;
-        const soundStat = typeof p?.sound?.stat === "string" ? p.sound.stat : null;
-
-        // Skip empty rows; we can expand later as we model more attributes.
-        if (!mw && !soundAudio) continue;
-
-        out.push({
-            entryUuid: entry.entryUuid,
-            ownerType: "HWI",
-            ownerId: entry.entryUuid,
-            mw,
-            l,
-            l2,
-            pun,
-            soundAudio,
-            soundRef,
-            soundStat,
-            rank: i,
-            fetchedAt: entry.fetchedAt ?? new Date(),
-        });
-    }
-
-    return out;
-}
-
-function scopeFromPath(path: string): string {
-    if (path.includes(".dros[")) return "DRO";
-    if (path.includes(".uros[")) return "URO";
-    return "ENTRY";
-}
-
-function* walkJson(value: unknown, path: string = "$"): Generator<{ path: string; value: any }> {
-    if (Array.isArray(value)) {
-        for (let i = 0; i < value.length; i++) {
-            yield* walkJson(value[i], `${path}[${i}]`);
-        }
-        return;
-    }
-    if (value && typeof value === "object") {
-        const obj = value as Record<string, unknown>;
-        yield { path, value: obj };
-        for (const [k, v] of Object.entries(obj)) {
-            yield* walkJson(v, `${path}.${k}`);
-        }
-    }
-}
-
-function extractVariantsAndInflections(entry: { entryUuid: string; rawJson: unknown; fetchedAt: Date }) {
-    const vrs: Array<{
-        vrId: string;
-        entryUuid: string;
-        va: string;
-        vl: string | null;
-        rank: number;
-        scopeType: string;
-        scopeRef: string;
-        fetchedAt: Date;
-    }> = [];
-    const ins: Array<{
-        inId: string;
-        entryUuid: string;
-        inflection: string | null;
-        ifc: string | null;
-        il: string | null;
-        rank: number;
-        scopeType: string;
-        scopeRef: string;
-        fetchedAt: Date;
-    }> = [];
-
-    for (const node of walkJson(entry.rawJson)) {
-        const obj = node.value as any;
-
-        if (Array.isArray(obj?.vrs)) {
-            const scopeType = scopeFromPath(node.path);
-            obj.vrs.forEach((vr: any, rank: number) => {
-                const va = typeof vr?.va === "string" ? vr.va : null;
-                if (!va || !va.trim()) return;
-                vrs.push({
-                    vrId: randomUUID(),
-                    entryUuid: entry.entryUuid,
-                    va,
-                    vl: typeof vr?.vl === "string" ? vr.vl : null,
-                    rank,
-                    scopeType,
-                    scopeRef: node.path,
-                    fetchedAt: entry.fetchedAt,
-                });
-            });
-        }
-
-        if (Array.isArray(obj?.ins)) {
-            const scopeType = scopeFromPath(node.path);
-            obj.ins.forEach((inf: any, rank: number) => {
-                const ifText = typeof inf?.if === "string" ? inf.if : null;
-                const ifc = typeof inf?.ifc === "string" ? inf.ifc : null;
-                const il = typeof inf?.il === "string" ? inf.il : null;
-                if ((!ifText || !ifText.trim()) && (!ifc || !ifc.trim())) return;
-                ins.push({
-                    inId: randomUUID(),
-                    entryUuid: entry.entryUuid,
-                    inflection: ifText,
-                    ifc,
-                    il,
-                    rank,
-                    scopeType,
-                    scopeRef: node.path,
-                    fetchedAt: entry.fetchedAt,
-                });
-            });
-        }
-    }
-
-    return { vrs, ins };
-}
-
-export async function fetchLearningUnitFromLookupKey(key: string): Promise<SelectLearningUnit | null> {
+export async function fetchLearningUnitsFromLookupKey(key: string): Promise<Array<SelectLearningUnit>> {
     const rows = await db
         .select({ unit: learningUnit })
         .from(mwStem)
         .innerJoin(learningUnit, eq(learningUnit.stemId, mwStem.stemId))
         .where(eq(mwStem.stemNorm, key))
-        .limit(1);
+        // Deterministic ordering for ambiguous keys.
+        .orderBy(desc(learningUnit.createdAt), learningUnit.unitId);
 
-    return rows[0]?.unit ?? null;
+    return rows.map((r) => r.unit);
 }
 
 export async function fetchLearningUnitFromLabelAndFingerprint(label: string, fingerprint: string): Promise<SelectLearningUnit | null> {
@@ -204,11 +58,6 @@ export async function fetchLexicalGroupFromFingerprint(fingerprint: string): Pro
  * Upsert a lookup key. This is a separate UI boundary where we choose to silently upsert
  * when only a lookup key is required for update.
  */
-export async function upsertLookupKey(_key: string, _unitId: string): Promise<void> {
-    // Deprecated in the stem-anchored model; kept temporarily for call-site compatibility.
-    return;
-}
-
 /**
  * Upsert a learning unit with its associated lexical group, entries, and lookup keys.
  */
@@ -266,14 +115,19 @@ export async function upsertLearningUnit(result: GetUnitResult): Promise<void> {
                 if (!Array.isArray(ahws)) return [];
                 return ahws
                     .map((a: any, rank: number) => ({
+                        ahwId: randomUUID(),
                         entryUuid: e.entryUuid,
                         hw: typeof a?.hw === "string" ? a.hw : "",
                         rank,
+                        _prs: a?.prs,
                     }))
                     .filter((a: any) => a.hw && a.hw.trim());
             });
             if (ahwRows.length > 0) {
-                await tx.insert(mwAhw).values(ahwRows).onConflictDoNothing();
+                await tx
+                    .insert(mwAhw)
+                    .values(ahwRows.map(({ _prs, ...row }) => row) as any)
+                    .onConflictDoNothing();
             }
 
             // 2c) dros + uros (top-level blocks, used for stem anchoring)
@@ -310,11 +164,12 @@ export async function upsertLearningUnit(result: GetUnitResult): Promise<void> {
                         utxt: u?.utxt ?? null,
                         rawJson: u ?? null,
                         fetchedAt: e.fetchedAt ?? new Date(),
+                        _prs: u?.prs,
                     }))
                     .filter((u: any) => u.ure && u.ure.trim() && u.fl && u.fl.trim());
             });
             if (uroRows.length > 0) {
-                await tx.insert(mwUro).values(uroRows as any).onConflictDoNothing({
+                await tx.insert(mwUro).values(uroRows.map(({ _prs, ...row }) => row) as any).onConflictDoNothing({
                     target: [mwUro.entryUuid, mwUro.rank],
                 });
             }
@@ -322,15 +177,17 @@ export async function upsertLearningUnit(result: GetUnitResult): Promise<void> {
             // 2d) variants + inflections (best-effort, used for stem anchoring)
             const vrRowsAll: any[] = [];
             const inRowsAll: any[] = [];
+            const extraPrRows: any[] = [];
             for (const e of result.entries) {
                 const fetchedAt = e.fetchedAt ?? new Date();
-                const { vrs, ins } = extractVariantsAndInflections({
+                const { vrs, ins, prRows } = extractVariantsAndInflections({
                     entryUuid: e.entryUuid,
                     rawJson: e.rawJson,
                     fetchedAt,
                 });
                 vrRowsAll.push(...vrs);
                 inRowsAll.push(...ins);
+                extraPrRows.push(...prRows);
             }
             if (vrRowsAll.length > 0) {
                 await tx.insert(mwVr).values(vrRowsAll).onConflictDoNothing();
@@ -345,14 +202,73 @@ export async function upsertLearningUnit(result: GetUnitResult): Promise<void> {
                 .values(result.groupEntries)
                 .onConflictDoNothing(); // composite PK handles it
 
-            // 3b) headword pronunciations (hwi.prs)
-            const prRows = result.entries.flatMap((e) =>
-                extractHwiPronunciations({
-                    entryUuid: e.entryUuid,
-                    rawJson: e.rawJson,
-                    fetchedAt: e.fetchedAt ?? new Date(),
-                }),
-            );
+            // 3b) pronunciations for supported owners (HWI, AHW, DRO, URO, VRS, INS)
+            const prRows: any[] = [];
+            for (const e of result.entries) {
+                const fetchedAt = e.fetchedAt ?? new Date();
+                const raw = e.rawJson as any;
+
+                prRows.push(
+                    ...extractPronunciationsFromPrs({
+                        entryUuid: e.entryUuid,
+                        ownerType: "HWI",
+                        ownerId: e.entryUuid,
+                        prs: raw?.hwi?.prs,
+                        fetchedAt,
+                    }),
+                );
+            }
+
+            // AHW prs (if present)
+            for (const a of ahwRows) {
+                if (Array.isArray((a as any)._prs)) {
+                    prRows.push(
+                        ...extractPronunciationsFromPrs({
+                            entryUuid: a.entryUuid,
+                            ownerType: "AHW",
+                            ownerId: a.ahwId,
+                            prs: (a as any)._prs,
+                            fetchedAt: new Date(),
+                        }),
+                    );
+                }
+            }
+
+            // DRO prs (if present)
+            for (const d of droRows as any[]) {
+                const rawPrs = (d as any)._prs;
+                if (Array.isArray(rawPrs)) {
+                    prRows.push(
+                        ...extractPronunciationsFromPrs({
+                            entryUuid: d.entryUuid,
+                            ownerType: "DRO",
+                            ownerId: d.droId,
+                            prs: rawPrs,
+                            fetchedAt: d.fetchedAt ?? new Date(),
+                        }),
+                    );
+                }
+            }
+
+            // URO prs (if present)
+            for (const u of uroRows as any[]) {
+                const rawPrs = (u as any)._prs;
+                if (Array.isArray(rawPrs)) {
+                    prRows.push(
+                        ...extractPronunciationsFromPrs({
+                            entryUuid: u.entryUuid,
+                            ownerType: "URO",
+                            ownerId: u.uroId,
+                            prs: rawPrs,
+                            fetchedAt: u.fetchedAt ?? new Date(),
+                        }),
+                    );
+                }
+            }
+
+            // VRS/INS prs extracted during walk
+            prRows.push(...extraPrRows);
+
             if (prRows.length > 0) {
                 await tx
                     .insert(mwPronunciation)
@@ -374,10 +290,15 @@ export async function upsertLearningUnit(result: GetUnitResult): Promise<void> {
                 if (i.inflection) inByNorm.set(normKey(i.inflection), { kind: "INS", id: i.inId });
                 if (i.ifc) inByNorm.set(normKey(i.ifc), { kind: "INS", id: i.inId });
             }
+            const ahwByNorm = new Map<string, { kind: string; id: string }>();
+            for (const a of ahwRows) ahwByNorm.set(normKey(a.hw), { kind: "AHW", id: a.ahwId });
 
             const stemRows = result.entries.flatMap((e) => {
                 const stems = Array.isArray(e.stems) ? (e.stems as any[]) : [];
                 const hwiHwNorm = normKey((e.rawJson as any)?.hwi?.hw ?? "");
+                const stemNormSet = new Set(
+                    stems.filter((s) => typeof s === "string" && s.trim().length > 0).map((s: string) => normKey(s)),
+                );
                 return stems
                     .filter((s) => typeof s === "string" && s.trim().length > 0)
                     .map((stem: string, rank: number) => {
@@ -386,12 +307,22 @@ export async function upsertLearningUnit(result: GetUnitResult): Promise<void> {
                             e.entryUuid === result.unit.representativeEntryUuid &&
                             stemNorm === normKey(result.unit.createdFromLookupKey);
 
-                        const anchor =
-                            droByNorm.get(stemNorm) ??
-                            uroByNorm.get(stemNorm) ??
-                            vrByNorm.get(stemNorm) ??
-                            inByNorm.get(stemNorm) ??
-                            (hwiHwNorm === stemNorm ? { kind: "HWI", id: e.entryUuid } : undefined);
+                        const resolve = (k: string) =>
+                            droByNorm.get(k) ??
+                            uroByNorm.get(k) ??
+                            vrByNorm.get(k) ??
+                            inByNorm.get(k) ??
+                            ahwByNorm.get(k) ??
+                            (hwiHwNorm === k ? { kind: "HWI", id: e.entryUuid } : undefined);
+
+                        let anchor = resolve(stemNorm);
+                        if (!anchor) {
+                            for (const cand of morphBaseCandidates(stemNorm)) {
+                                if (!stemNormSet.has(cand)) continue;
+                                anchor = resolve(cand);
+                                if (anchor) break;
+                            }
+                        }
 
                         return {
                             stemId: isSelected ? result.unit.stemId : undefined,

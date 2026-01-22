@@ -10,5 +10,5 @@
  * - mw-pronunciation.ts: Pronunciations
  */
 // Re-export everything from the new structure
-export * from "./dao/index";
+export * from "@/lib/services/dao/index";
 

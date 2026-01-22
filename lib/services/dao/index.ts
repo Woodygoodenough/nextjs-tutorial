@@ -5,10 +5,9 @@
 
 // Learning Units & Lexical Groups
 export {
-    fetchLearningUnitFromLookupKey,
+    fetchLearningUnitsFromLookupKey,
     fetchLearningUnitFromLabelAndFingerprint,
     fetchLexicalGroupFromFingerprint,
-    upsertLookupKey,
     upsertLearningUnit,
 } from "@/lib/services/dao/learning-units";
 

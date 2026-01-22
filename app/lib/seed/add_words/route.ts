@@ -1,11 +1,9 @@
 import { searchMW } from "@/lib/services/search";
-import { silentlyPersistLookupKey, persistSearchResult } from "@/lib/services/search";
+import { persistSearchResult } from "@/lib/services/search";
 import { GetUnitResult } from "@/lib/types/commons";
 
 async function resolveSearchAndPersist(lookupKey: string): Promise<GetUnitResult> {
     const result = await searchMW(lookupKey);
-    // Persisting lookup keys is currently best-effort; persistence of new units is handled below.
-    await silentlyPersistLookupKey(result);
     await persistSearchResult(result);
     return result;
 }

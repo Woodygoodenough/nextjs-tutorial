@@ -12,12 +12,12 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 
-import GridList03 from "@/components/grid-list-03";
 import {
   addExistingUnitToLibrary,
   resolveExistingUnit,
   searchExistingUnits,
   searchAndResolve,
+  type SearchAndResolveResult,
   type SearchWidgetResolved,
   type SearchWidgetResult,
 } from "@/lib/actions/search-widget";
@@ -50,6 +50,7 @@ export function SearchWidget() {
   const [query, setQuery] = React.useState("");
   const [status, setStatus] = React.useState<Status>("idle");
   const [suggestions, setSuggestions] = React.useState<Array<SearchWidgetResult>>([]);
+  const [candidates, setCandidates] = React.useState<Array<SearchWidgetResult> | null>(null);
   const [suggestionsOpen, setSuggestionsOpen] = React.useState(false);
   const [isFocused, setIsFocused] = React.useState(false);
   const [resolved, setResolved] = React.useState<SearchWidgetResolved | null>(null);
@@ -92,6 +93,7 @@ export function SearchWidget() {
     setQuery("");
     setStatus("idle");
     setSuggestions([]);
+    setCandidates(null);
     setSuggestionsOpen(false);
     setResolved(null);
     setError(null);
@@ -104,8 +106,16 @@ export function SearchWidget() {
     startTransition(async () => {
       try {
         setStatus("loading");
-        const r = await searchAndResolve(q);
-        setResolved(r);
+        const r: SearchAndResolveResult = await searchAndResolve(q);
+        if (r.kind === "candidates") {
+          setCandidates(r.candidates);
+          setResolved(null);
+          setStatus("success");
+          setError(null);
+          return;
+        }
+        setCandidates(null);
+        setResolved(r.resolved);
         setStatus("success");
         setError(null);
       } catch (e) {
@@ -162,6 +172,7 @@ export function SearchWidget() {
               setQuery(next);
               // Any new typing starts a new search flow.
               setResolved(null);
+              setCandidates(null);
               setError(null);
               setSuggestionsOpen(true);
             }}
@@ -237,7 +248,33 @@ export function SearchWidget() {
 
       <Separator className="my-4" />
 
-      {!resolved ? (
+      {candidates && candidates.length > 0 ? (
+        <div className="space-y-3">
+          <div className="text-sm text-muted-foreground">
+            Multiple matches found for this lookup. Pick one to view details.
+          </div>
+          <Card className="p-2">
+            <div className="space-y-1">
+              {candidates.map((c, idx) => (
+                <button
+                  key={c.unitId}
+                  type="button"
+                  className="w-full text-left rounded-md px-2 py-2 hover:bg-muted"
+                  onClick={() => selectSuggestion(c.unitId)}
+                >
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">#{idx + 1}</Badge>
+                    <div className="truncate font-medium">{c.label}</div>
+                    <div className="ml-auto">
+                      <Badge variant="outline">{c.matchMethod}</Badge>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </Card>
+        </div>
+      ) : !resolved ? (
         <ExploreTiles />
       ) : (
         <ScrollArea className="h-[460px]">

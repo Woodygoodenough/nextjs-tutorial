@@ -127,16 +127,6 @@ export const learningUnit = pgTable(
     (t) => [uniqueIndex("learning_unit_group_label_unique").on(t.groupId, t.label)],
 );
 
-export const lookupKey = pgTable("lookup_key", {
-    lookupKey: text("lookup_key").primaryKey(),
-    unitId: uuid("unit_id")
-        .notNull()
-        .references(() => learningUnit.unitId, { onDelete: "cascade" }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
-    hitCount: integer("hit_count").notNull().default(1),
-});
-
 export const userVocab = pgTable(
     "user_vocab",
     {
@@ -349,7 +339,6 @@ export type InsertMwEntry = InferInsertModel<typeof mwEntry>;
 export type InsertLexicalGroup = InferInsertModel<typeof lexicalGroup>;
 export type InsertLexicalGroupEntry = InferInsertModel<typeof lexicalGroupEntry>;
 export type InsertLearningUnit = InferInsertModel<typeof learningUnit>;
-export type InsertLookupKey = InferInsertModel<typeof lookupKey>;
 export type InsertUser = InferInsertModel<typeof users>;
 export type InsertUserVocab = InferInsertModel<typeof userVocab>;
 export type InsertUserProgressRecord = InferInsertModel<typeof userProgressRecord>;
@@ -359,7 +348,6 @@ export type SelectMwEntry = InferSelectModel<typeof mwEntry>;
 export type SelectLexicalGroup = InferSelectModel<typeof lexicalGroup>;
 export type SelectLexicalGroupEntry = InferSelectModel<typeof lexicalGroupEntry>;
 export type SelectLearningUnit = InferSelectModel<typeof learningUnit>;
-export type SelectLookupKey = InferSelectModel<typeof lookupKey>;
 export type SelectUserVocab = InferSelectModel<typeof userVocab>;
 export type SelectUserProgressRecord = InferSelectModel<typeof userProgressRecord>;
 

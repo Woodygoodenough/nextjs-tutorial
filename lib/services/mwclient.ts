@@ -1,4 +1,3 @@
-import type { InsertMwEntry } from "@/lib/db/schema";
 export type MWDictionary = "collegiate" | "learners" | "medical" | "intermediate" | "elementary";
 
 export type MWRawResponse = unknown;
@@ -104,47 +103,6 @@ export function parseMWResponse(query: string, raw: MWRawResponse): MWLookupResu
         return { kind: "entries", query, raw };
     }
     return { kind: "uncaptured", query, raw };
-}
-
-function cleanHeadwordRaw(headwordRaw: string): string {
-    return headwordRaw.replace(/\*/g, "");
-}
-
-function stemsFromRawEntry(raw: unknown): string[] {
-    const meta = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>).meta : undefined;
-    if (!meta || typeof meta !== "object") return [];
-    const stems = (meta as Record<string, unknown>).stems;
-    return Array.isArray(stems) ? stems.filter((x): x is string => typeof x === "string") : [];
-}
-
-function headwordRawFromEntry(raw: unknown): string {
-    const hwi = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>).hwi : undefined;
-    if (!hwi || typeof hwi !== "object") return "";
-    const hw = (hwi as Record<string, unknown>).hw;
-    return typeof hw === "string" ? hw : "";
-}
-
-export function parseEntries(raw: MWRawResponse): Array<InsertMwEntry> {
-    if (!Array.isArray(raw)) return [];
-
-    return (raw as Array<Record<string, unknown>>).map((e: Record<string, unknown>) => {
-        const meta = typeof e.meta === "object" && e.meta !== null ? (e.meta as Record<string, unknown>) : null;
-        const metaUuid = meta && typeof meta.uuid === "string" ? meta.uuid : null;
-        const metaId = meta && typeof meta.id === "string" ? meta.id : null;
-
-        if (!metaUuid) {
-            throw new Error("MW entry missing meta.uuid (cannot persist mw_entry.entry_uuid)");
-        }
-
-        return {
-            entryUuid: metaUuid,
-            metaId: metaId ?? null,
-            headwordRaw: cleanHeadwordRaw(headwordRawFromEntry(e)) || null,
-            stems: stemsFromRawEntry(e),
-            rawJson: e,
-            fetchedAt: new Date(),
-        };
-    });
 }
 
 export function createMWClientFromEnv(): MWClient {
