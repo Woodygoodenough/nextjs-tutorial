@@ -166,7 +166,6 @@ function extractPronunciations(
 
   // VRS/INS prs were extracted while walking raw_json (attached to generated vr_id/in_id)
   for (const v of vrRows) {
-    // no-op; prs already included in extraction phase via prRows
     void v;
   }
   for (const i of inRows) {

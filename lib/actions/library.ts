@@ -8,7 +8,7 @@ import { requireUserId } from "./require-user-id";
 export type LibraryUnit = {
   unitId: string;
   label: string;
-  matchMethod: string;
+  anchorKind: string | null;
   progress: number;
   lastReviewedAt: Date | null;
   shortdef: string | null;
@@ -24,7 +24,7 @@ export type LibraryPageResult = {
 export type WordDetail = {
   unitId: string;
   label: string;
-  matchMethod: string;
+  anchorKind: string | null;
   progress: number;
   lastReviewedAt: Date | null;
   shortdef: string | null;
@@ -55,7 +55,7 @@ export async function getUserLibraryUnits(
     const unitsRows = await sql<Array<{
       unit_id: string;
       label: string;
-      match_method: string;
+      anchor_kind: string | null;
       progress: number;
       last_reviewed_at: Date | null;
       shortdef: string | null;
@@ -63,7 +63,7 @@ export async function getUserLibraryUnits(
       SELECT DISTINCT
         lu.unit_id as unit_id,
         lu.label as label,
-        lu.match_method as match_method,
+        ms.anchor_kind as anchor_kind,
         uv.progress as progress,
         uv.last_reviewed_at as last_reviewed_at,
         CASE 
@@ -105,7 +105,7 @@ export async function getUserLibraryUnits(
         return {
           unitId: u.unit_id,
           label: u.label,
-          matchMethod: u.match_method,
+          anchorKind: u.anchor_kind ?? null,
           progress: u.progress,
           lastReviewedAt: u.last_reviewed_at,
           shortdef: shortdef || null,
@@ -129,7 +129,7 @@ export async function getUserLibraryUnits(
     const unitsRows = await sql<Array<{
       unit_id: string;
       label: string;
-      match_method: string;
+      anchor_kind: string | null;
       progress: number;
       last_reviewed_at: Date | null;
       shortdef: string | null;
@@ -137,7 +137,7 @@ export async function getUserLibraryUnits(
       SELECT
         lu.unit_id as unit_id,
         lu.label as label,
-        lu.match_method as match_method,
+        ms.anchor_kind as anchor_kind,
         uv.progress as progress,
         uv.last_reviewed_at as last_reviewed_at,
         CASE 
@@ -151,6 +151,7 @@ export async function getUserLibraryUnits(
         END as shortdef
       FROM user_vocab uv
       INNER JOIN learning_unit lu ON uv.unit_id = lu.unit_id
+      LEFT JOIN mw_stem ms ON lu.stem_id = ms.stem_id
       LEFT JOIN mw_entry me ON lu.representative_entry_uuid = me.entry_uuid
       WHERE uv.user_id = ${userId}
       ORDER BY uv.last_reviewed_at DESC NULLS LAST, lu.created_at DESC
@@ -174,7 +175,7 @@ export async function getUserLibraryUnits(
         return {
           unitId: u.unit_id,
           label: u.label,
-          matchMethod: u.match_method,
+          anchorKind: u.anchor_kind ?? null,
           progress: u.progress,
           lastReviewedAt: u.last_reviewed_at,
           shortdef: shortdef || null,
@@ -193,7 +194,7 @@ export async function getWordDetail(unitId: string): Promise<WordDetail | null> 
   const rows = await sql<Array<{
     unit_id: string;
     label: string;
-    match_method: string;
+    anchor_kind: string | null;
     progress: number;
     last_reviewed_at: Date | null;
     shortdef: string | null;
@@ -203,7 +204,7 @@ export async function getWordDetail(unitId: string): Promise<WordDetail | null> 
     SELECT
       lu.unit_id as unit_id,
       lu.label as label,
-      lu.match_method as match_method,
+      ms.anchor_kind as anchor_kind,
       uv.progress as progress,
       uv.last_reviewed_at as last_reviewed_at,
       CASE 
@@ -219,6 +220,7 @@ export async function getWordDetail(unitId: string): Promise<WordDetail | null> 
       me.meta_id as meta_id
     FROM user_vocab uv
     INNER JOIN learning_unit lu ON uv.unit_id = lu.unit_id
+    LEFT JOIN mw_stem ms ON lu.stem_id = ms.stem_id
     LEFT JOIN mw_entry me ON lu.representative_entry_uuid = me.entry_uuid
     WHERE uv.user_id = ${userId} AND lu.unit_id = ${unitId}
     LIMIT 1
@@ -238,7 +240,7 @@ export async function getWordDetail(unitId: string): Promise<WordDetail | null> 
   return {
     unitId: u.unit_id,
     label: u.label,
-    matchMethod: u.match_method,
+    anchorKind: u.anchor_kind ?? null,
     progress: u.progress,
     lastReviewedAt: u.last_reviewed_at,
     shortdef: shortdef || null,

@@ -266,7 +266,7 @@ export function SearchWidget() {
                     <Badge variant="secondary">#{idx + 1}</Badge>
                     <div className="truncate font-medium">{c.label}</div>
                     <div className="ml-auto">
-                      <Badge variant="outline">{c.matchMethod}</Badge>
+                      <Badge variant="outline">{c.anchorKind ?? "—"}</Badge>
                     </div>
                   </div>
                 </button>
@@ -302,7 +302,7 @@ export function SearchWidget() {
                   <div className="min-w-0">
                     <div className="font-medium truncate">{resolved.label}</div>
                     <div className="mt-2 flex gap-2">
-                      <Badge variant="outline">{resolved.matchMethod}</Badge>
+                      <Badge variant="outline">{resolved.anchorKind ?? "—"}</Badge>
                       {resolved.inLibrary ? (
                         <Badge variant="secondary">In library</Badge>
                       ) : null}

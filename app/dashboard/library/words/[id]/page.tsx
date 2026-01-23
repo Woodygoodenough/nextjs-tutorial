@@ -105,8 +105,8 @@ export default async function WordDetailPage({ params }: Props) {
             )}
 
             <div>
-              <p className="text-sm text-muted-foreground mb-1">Match Method</p>
-              <Badge variant="outline">{word.matchMethod}</Badge>
+              <p className="text-sm text-muted-foreground mb-1">Anchor</p>
+              <Badge variant="outline">{word.anchorKind ?? "—"}</Badge>
             </div>
 
             {word.shortdef && (

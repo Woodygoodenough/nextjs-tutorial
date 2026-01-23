@@ -1,15 +1,16 @@
 "use server";
 
 import { sql } from "@/lib/db/client";
-import { upsertUserVocab } from "@/lib/services/dao";
-import { persistSearchResult, searchMW } from "@/lib/services/search";
+import { fetchLearningUnitSummariesByQuery, fetchLearningUnitSummaryByUnitId, fetchLearningUnitStemInfoByUnitIds, upsertUserVocab } from "@/lib/services/dao";
+import { persistSearchResult, searchMW } from "@/lib/services/learning-unit-search";
 import type { Mastery } from "@/domain/review/scheduler";
 import { requireUserId } from "@/lib/actions/require-user-id";
 
 export type SearchWidgetResult = {
   unitId: string;
   label: string;
-  matchMethod: string;
+  stem: string | null;
+  anchorKind: string | null;
 };
 
 export type SearchWidgetEntry = {
@@ -35,23 +36,8 @@ export async function searchExistingUnits(query: string): Promise<Array<SearchWi
   const q = query.trim();
   if (!q) return [];
 
-  const like = `%${q}%`;
-
   // DB-only search (no MW fetch). Pull a larger candidate set, then rank in JS.
-  const rows = await sql<
-    Array<{ unitId: string; label: string; matchMethod: string | null; createdAt: Date | null }>
-  >`
-    select
-      lu.unit_id as "unitId",
-      lu.label as "label",
-      lu.match_method as "matchMethod",
-      lu.created_at as "createdAt"
-    from learning_unit lu
-    left join mw_stem ms on ms.stem_id = lu.stem_id
-    where (lu.label ilike ${like} or ms.stem ilike ${like} or ms.stem_norm ilike ${like})
-    order by lu.created_at desc
-    limit 25;
-  `;
+  const rows = await fetchLearningUnitSummariesByQuery({ query: q, limit: 25 });
 
   const seen = new Set<string>();
   const unique = rows.filter((r) => {
@@ -85,7 +71,8 @@ export async function searchExistingUnits(query: string): Promise<Array<SearchWi
   return unique.slice(0, 3).map((r) => ({
     unitId: r.unitId,
     label: r.label,
-    matchMethod: r.matchMethod ?? "UNKNOWN",
+    stem: r.stem ?? null,
+    anchorKind: r.anchorKind ?? null,
   }));
 }
 
@@ -122,20 +109,7 @@ export async function addExistingUnitToLibrary(unitId: string): Promise<void> {
 
 export async function resolveExistingUnit(unitId: string): Promise<SearchWidgetResolved> {
   const userId = await requireUserId();
-
-  const rows = await sql<
-    Array<{ unitId: string; label: string; matchMethod: string | null }>
-  >`
-    select
-      lu.unit_id as "unitId",
-      lu.label as "label",
-      lu.match_method as "matchMethod"
-    from learning_unit lu
-    where lu.unit_id = ${unitId}
-    limit 1;
-  `;
-
-  const unit = rows[0];
+  const unit = await fetchLearningUnitSummaryByUnitId(unitId);
   if (!unit) throw new Error("Learning unit not found");
 
   const entries = await fetchTopEntriesForUnit(unit.unitId);
@@ -144,7 +118,8 @@ export async function resolveExistingUnit(unitId: string): Promise<SearchWidgetR
   return {
     unitId: unit.unitId,
     label: unit.label,
-    matchMethod: unit.matchMethod ?? "UNKNOWN",
+    stem: unit.stem ?? null,
+    anchorKind: unit.anchorKind ?? null,
     entries,
     inLibrary,
   };
@@ -160,23 +135,27 @@ export async function searchAndResolve(query: string): Promise<SearchAndResolveR
     throw new Error(result.reason);
   }
   if (result.status === "candidates") {
+    const ids = result.candidates.map((u) => u.unitId);
+    const stemInfo = await fetchLearningUnitStemInfoByUnitIds(ids);
     return {
       kind: "candidates",
       candidates: result.candidates.map((u) => ({
         unitId: u.unitId,
         label: u.label,
-        matchMethod: u.matchMethod ?? "UNKNOWN",
+        stem: stemInfo.get(u.unitId)?.stem ?? null,
+        anchorKind: stemInfo.get(u.unitId)?.anchorKind ?? null,
       })),
     };
   }
 
   const unitId = result.unit.unitId;
   const label = result.unit.label ?? "";
-  const matchMethod = (result.unit as any).matchMethod ?? "UNKNOWN";
 
   const entries = await fetchTopEntriesForUnit(unitId);
   const inLibrary = await isInUserLibrary(userId, unitId);
 
-  return { kind: "resolved", resolved: { unitId, label, matchMethod, entries, inLibrary } };
+  // Reuse the resolver so we always return the same shape (incl. stem + anchorKind).
+  const resolved = await resolveExistingUnit(unitId);
+  return { kind: "resolved", resolved: { ...resolved, entries, inLibrary } };
 }
 

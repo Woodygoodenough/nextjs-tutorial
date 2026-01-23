@@ -1,5 +1,5 @@
 import type { InsertMwEntry } from "@/lib/db/schema";
-import type { MWRawResponse } from "@/lib/services/mwclient";
+import type { MWRawResponse } from "@/lib/services/mw-client";
 
 function cleanHeadwordRaw(headwordRaw: string): string {
   return headwordRaw.replace(/\*/g, "");

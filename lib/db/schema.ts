@@ -120,7 +120,6 @@ export const learningUnit = pgTable(
         representativeEntryUuid: uuid("representative_entry_uuid")
             .notNull()
             .references(() => mwEntry.entryUuid),
-        matchMethod: text("match_method").notNull(), // you can enforce via enum too
         createdFromLookupKey: text("created_from_lookup_key").notNull(),
         createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     },

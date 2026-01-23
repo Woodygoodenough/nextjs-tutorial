@@ -71,6 +71,20 @@
       "when": 1768950003000,
       "tag": "0009_create_mw_dro_mw_uro",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1769120000000,
+      "tag": "0010_drop_lookup_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1769120001000,
+      "tag": "0011_drop_learning_unit_match_method",
+      "breakpoints": true
     }
   ]
 }

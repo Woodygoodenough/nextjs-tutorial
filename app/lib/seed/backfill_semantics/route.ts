@@ -1,4 +1,4 @@
-import { backfillSemanticsForLearningUnits } from "@/lib/services/dao/backfill-entry";
+import { backfillSemanticsForLearningUnits } from "@/lib/services/dao/entry-backfill";
 
 export async function GET() {
   try {

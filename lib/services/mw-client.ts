@@ -25,7 +25,6 @@ export type MWLookupResult =
         raw: MWRawResponse;
     };
 
-
 interface MWClientOptions {
     apiKey: string;
     dictionary?: MWDictionary;

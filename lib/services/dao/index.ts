@@ -9,7 +9,14 @@ export {
     fetchLearningUnitFromLabelAndFingerprint,
     fetchLexicalGroupFromFingerprint,
     upsertLearningUnit,
-} from "@/lib/services/dao/learning-units";
+} from "@/lib/services/dao/learning-unit-dao";
+
+// Learning unit summaries (joins to mw_stem for display / UX)
+export {
+    fetchLearningUnitSummariesByQuery,
+    fetchLearningUnitSummaryByUnitId,
+    fetchLearningUnitStemInfoByUnitIds,
+} from "@/lib/services/dao/learning-unit-summaries";
 
 // User Vocabulary
 export {

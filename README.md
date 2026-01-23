@@ -46,7 +46,6 @@ This ensures MW display formatting does not prevent a stem from anchoring to its
   - `group_id` (FK → `lexical_group.group_id`)
   - `representative_entry_uuid` (FK → `mw_entry.entry_uuid`)
   - `label` (display label for the unit)
-  - `match_method` (string; operational info)
   - `created_from_lookup_key` (string; what the user typed)
   - `created_at`
 
@@ -176,8 +175,8 @@ This is intentionally a *bounded heuristic*, not a full linguistic lemmatizer.
 
 Both ingest paths use the same fallback logic:
 
-- Live ingest (new MW fetch): `lib/services/dao/learning-units.ts`
-- Backfill from stored JSON: `lib/services/dao/backfill-entry.ts`
+- Live ingest (new MW fetch): `lib/services/dao/learning-unit-dao.ts`
+- Backfill from stored JSON: `lib/services/dao/entry-backfill.ts`
 
 They both call `morphBaseCandidates(stemNorm)` and try candidates in order until an anchor is found.
 
@@ -203,8 +202,8 @@ File: `lib/services/dao/mw-extract.ts`
 
 The “walk MW JSON + extract variants/inflections + extract pronunciations from `prs[]`” logic is shared between:
 
-- `lib/services/dao/learning-units.ts` (live ingest)
-- `lib/services/dao/backfill-entry.ts` (backfill)
+- `lib/services/dao/learning-unit-dao.ts` (live ingest)
+- `lib/services/dao/entry-backfill.ts` (backfill)
 
 This prevents “two slightly different parsers” drifting over time.
 
@@ -213,6 +212,17 @@ This prevents “two slightly different parsers” drifting over time.
 `fallback_warning` is an **operational safety signal**.
 
 We intentionally **do not anchor stems to sense-level structures yet**. If MW’s searchable `meta.stems[]` contains something whose best semantic match is currently only representable at a deeper level (e.g., sense-level variant/inflection we are not modeling), our resolver may not find a match.
+
+In practice, stems commonly fail to find an anchor when the “best semantic parent” lives in parts of the entry we are not modeling as stable owners yet, for example:
+
+- **Phrase-only text**: a phrase shown in `<phrase>` / phrase-like display fields, without a corresponding persisted owner row.
+- **Sense-only “called-also” forms**: `ca` appears inside a sense/definition structure, not as an entry-level `URO/DRO/VRS/INS/AHW/HWI`.
+- **Cognate cross-references**: `cxt` entries within `cxs` (cross-reference blocks) that function like links but are not persisted owners.
+- **Linked word text**: an actually linked word inside `<a>` within definition markup (we don’t currently persist sense/def-level link targets as owners).
+- **Related word mention without link**: related forms mentioned in prose/markup but not represented as an explicit run-on/variant/inflection owner.
+- **Other def/sense structures**: cases where a “valid anchor” conceptually exists within `def`/sense JSON, but is not yet modeled in our schema.
+
+For now we keep these stems **unanchored** (`anchor_kind=UNKNOWN`, `fallback_warning=true`) because in most cases **searching that stem directly** yields a separate MW response that is semantically richer (and easier to model) than trying to infer a sense-level anchor from nested definition markup.
 
 In that case:
 
