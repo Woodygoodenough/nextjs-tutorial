@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Volume2 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 
-function mwAudioUrlFromBaseFilename(audio: string): string {
+export function mwAudioUrlFromBaseFilename(audio: string): string {
   const a = audio.trim();
   const lower = a.toLowerCase();
 

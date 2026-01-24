@@ -10,19 +10,11 @@ import {
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
-import {
-  Home,
-  Settings,
-  ChartBar,
-  PowerIcon,
-  BookOpen,
-} from "lucide-react";
 import YamyLogoBook from '@/app/ui/yamy-logo-book'
 import type { Route } from "./nav-main";
 import DashboardNavigation from "@/components/sidebar-03/nav-main";
 import { NotificationsPopover } from "@/components/sidebar-03/nav-notifications";
 import { TeamSwitcher } from "@/components/sidebar-03/team-switcher";
-import { signOut } from "@/auth";
 
 const sampleNotifications = [
   {
@@ -48,43 +40,11 @@ const sampleNotifications = [
   },
 ];
 
-const dashboardRoutes: Route[] = [
-  {
-    id: "home",
-    title: "Home",
-    icon: <Home className="size-4" />,
-    link: "/",
-  },
-  {
-    id: "dashboard",
-    title: "Dashboard",
-    icon: <ChartBar className="size-4" />,
-    link: "/dashboard",
-  },
-  {
-    id: "library",
-    title: "My Library",
-    icon: <BookOpen className="size-4" />,
-    link: "/dashboard/library",
-  },
-  {
-    id: "settings",
-    title: "Settings",
-    icon: <Settings className="size-4" />,
-    link: "#",
-    subs: [
-      { title: "General", link: "#" },
-      { title: "Webhooks", link: "#" },
-      { title: "Custom Fields", link: "#" },
-    ],
-  },
-];
-
 const users = [
   { id: "1", name: "Demo User", logo: YamyLogoBook, plan: "Premium" },
 ];
 
-export function DashboardSidebar() {
+export function DashboardSidebar({ routes }: { routes: Route[] }) {
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
 
@@ -122,7 +82,7 @@ export function DashboardSidebar() {
         </motion.div>
       </SidebarHeader>
       <SidebarContent className="gap-4 px-2 py-4">
-        <DashboardNavigation routes={dashboardRoutes} />
+        <DashboardNavigation routes={routes} />
       </SidebarContent>
 
       <SidebarFooter className="px-2">
