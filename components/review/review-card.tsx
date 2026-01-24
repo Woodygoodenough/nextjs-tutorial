@@ -119,6 +119,10 @@ export function ReviewCard({ item, settings, onReview }: Props) {
       // Cleanup: pause audio if component unmounts (e.g. user skips quickly)
       return () => {
         audio.pause();
+        // Reset ref so that if Strict Mode remounts the component immediately, it can play again.
+        // Without this, the second mount sees ref=true and skips playing, resulting in silence
+        // (because the first mount's audio was paused by this cleanup).
+        audioPlayedRef.current = false;
       };
     }
   }, [settings.autoPlay, audioUrl]); // Removed item.unitId dependency as it is constant for this instance (keyed)

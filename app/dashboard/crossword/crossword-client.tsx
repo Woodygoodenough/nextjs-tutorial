@@ -1,20 +1,28 @@
 "use client";
 
-import { useState } from "react";
 import { CrosswordGrid } from "@/lib/services/crossword/generator";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { RefreshCw } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 type Props = {
   puzzle: CrosswordGrid | null;
 };
 
 export function CrosswordClient({ puzzle }: Props) {
+  const router = useRouter();
+
   if (!puzzle) {
     return (
       <Card>
-        <CardContent className="py-10 text-center">
+        <CardContent className="py-10 text-center space-y-4">
           <p className="text-muted-foreground">Could not generate a crossword with the available words.</p>
+          <Button onClick={() => router.refresh()}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Try Again
+          </Button>
         </CardContent>
       </Card>
     );
@@ -42,69 +50,78 @@ export function CrosswordClient({ puzzle }: Props) {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-8">
-        {/* Grid */}
-        <div className="overflow-auto bg-muted/20 p-4 rounded-lg border">
-            <div
-                className="grid gap-[1px] bg-gray-300 dark:bg-gray-700 mx-auto"
-                style={{
-                    gridTemplateColumns: `repeat(${width}, ${cellSize}px)`,
-                    width: `calc(${width * cellSize}px + ${width - 1}px)`
-                }}
-            >
-                {grid.map((row, y) => (
-                    row.map((char, x) => {
-                        const number = numbersMap.get(`${x},${y}`);
-                        return (
-                            <div
-                                key={`${x}-${y}`}
-                                className={cn(
-                                    "relative w-[30px] h-[30px] flex items-center justify-center text-sm font-bold uppercase select-none",
-                                    char ? "bg-white dark:bg-gray-900 text-foreground" : "bg-black dark:bg-gray-950"
-                                )}
-                            >
-                                {number && (
-                                    <span className="absolute top-[1px] left-[1px] text-[8px] leading-none text-muted-foreground">
-                                        {number}
-                                    </span>
-                                )}
-                                {char}
-                            </div>
-                        );
-                    })
-                ))}
-            </div>
+    <div className="space-y-6">
+        <div className="flex justify-end">
+            <Button variant="outline" onClick={() => router.refresh()}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                New Game
+            </Button>
         </div>
 
-        {/* Clues */}
-        <div className="flex-1 grid md:grid-cols-2 gap-6">
-            <div>
-                <h3 className="font-bold mb-3 border-b pb-1">Across</h3>
-                <ul className="space-y-2 text-sm">
-                    {placedWords
-                        .filter(w => w.direction === 'across')
-                        .sort((a, b) => (numbersMap.get(`${a.x},${a.y}`) || 0) - (numbersMap.get(`${b.x},${b.y}`) || 0))
-                        .map(w => (
-                            <li key={w.word}>
-                                <span className="font-bold mr-1">{numbersMap.get(`${w.x},${w.y}`)}.</span>
-                                {w.clue}
-                            </li>
-                        ))}
-                </ul>
+        <div className="flex flex-col lg:flex-row gap-8">
+            {/* Grid */}
+            <div className="overflow-auto bg-muted/20 p-4 rounded-lg border">
+                <div
+                    className="grid gap-[1px] bg-gray-300 dark:bg-gray-700 mx-auto"
+                    style={{
+                        gridTemplateColumns: `repeat(${width}, ${cellSize}px)`,
+                        width: `calc(${width * cellSize}px + ${width - 1}px)`
+                    }}
+                >
+                    {grid.map((row, y) => (
+                        row.map((char, x) => {
+                            const number = numbersMap.get(`${x},${y}`);
+                            return (
+                                <div
+                                    key={`${x}-${y}`}
+                                    className={cn(
+                                        "relative w-[30px] h-[30px] flex items-center justify-center text-sm font-bold uppercase select-none",
+                                        char ? "bg-white dark:bg-gray-900 text-foreground" : "bg-black dark:bg-gray-950"
+                                    )}
+                                >
+                                    {number && (
+                                        <span className="absolute top-[1px] left-[1px] text-[8px] leading-none text-muted-foreground">
+                                            {number}
+                                        </span>
+                                    )}
+                                    {char}
+                                </div>
+                            );
+                        })
+                    ))}
+                </div>
             </div>
-            <div>
-                <h3 className="font-bold mb-3 border-b pb-1">Down</h3>
-                <ul className="space-y-2 text-sm">
-                    {placedWords
-                        .filter(w => w.direction === 'down')
-                        .sort((a, b) => (numbersMap.get(`${a.x},${a.y}`) || 0) - (numbersMap.get(`${b.x},${b.y}`) || 0))
-                        .map(w => (
-                            <li key={w.word}>
-                                <span className="font-bold mr-1">{numbersMap.get(`${w.x},${w.y}`)}.</span>
-                                {w.clue}
-                            </li>
-                        ))}
-                </ul>
+
+            {/* Clues */}
+            <div className="flex-1 grid md:grid-cols-2 gap-6">
+                <div>
+                    <h3 className="font-bold mb-3 border-b pb-1">Across</h3>
+                    <ul className="space-y-2 text-sm">
+                        {placedWords
+                            .filter(w => w.direction === 'across')
+                            .sort((a, b) => (numbersMap.get(`${a.x},${a.y}`) || 0) - (numbersMap.get(`${b.x},${b.y}`) || 0))
+                            .map(w => (
+                                <li key={w.word}>
+                                    <span className="font-bold mr-1">{numbersMap.get(`${w.x},${w.y}`)}.</span>
+                                    {w.clue}
+                                </li>
+                            ))}
+                    </ul>
+                </div>
+                <div>
+                    <h3 className="font-bold mb-3 border-b pb-1">Down</h3>
+                    <ul className="space-y-2 text-sm">
+                        {placedWords
+                            .filter(w => w.direction === 'down')
+                            .sort((a, b) => (numbersMap.get(`${a.x},${a.y}`) || 0) - (numbersMap.get(`${b.x},${b.y}`) || 0))
+                            .map(w => (
+                                <li key={w.word}>
+                                    <span className="font-bold mr-1">{numbersMap.get(`${w.x},${w.y}`)}.</span>
+                                    {w.clue}
+                                </li>
+                            ))}
+                    </ul>
+                </div>
             </div>
         </div>
     </div>
