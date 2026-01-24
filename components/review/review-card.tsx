@@ -100,19 +100,28 @@ export function ReviewCard({ item, settings, onReview }: Props) {
   // Reset state when item changes
   useEffect(() => {
     setRevealed(false);
-    audioPlayedRef.current = false;
+    // Note: We do NOT reset audioPlayedRef here.
+    // Since ReviewCard is keyed by unitId, a new instance is created for each word,
+    // and useRef initializes to false.
+    // Resetting it here causes double-playback in Strict Mode (mount -> reset -> play -> unmount -> remount -> reset -> play).
   }, [item.unitId]);
 
   // Auto-play
   useEffect(() => {
+    // Only play if we haven't played yet (guarded by ref)
     if (settings.autoPlay && audioUrl && !audioPlayedRef.current) {
       const audio = new Audio(audioUrl);
       audio.play().catch((err) => {
         console.warn("Auto-play failed (likely browser blocked):", err);
       });
       audioPlayedRef.current = true;
+
+      // Cleanup: pause audio if component unmounts (e.g. user skips quickly)
+      return () => {
+        audio.pause();
+      };
     }
-  }, [settings.autoPlay, audioUrl, item.unitId]);
+  }, [settings.autoPlay, audioUrl]); // Removed item.unitId dependency as it is constant for this instance (keyed)
 
   // Visibility Logic
   // If no PR (no audio), title MUST be shown.
