@@ -1,11 +1,61 @@
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { DashboardSidebar } from "@/components/sidebar-03/app-sidebar";
+import { getDueReviewCount } from "@/lib/actions/review";
+import {
+  Home,
+  Settings,
+  ChartBar,
+  BookOpen,
+  GraduationCap
+} from "lucide-react";
+import type { Route } from "./nav-main";
 
-export default function Sidebar03() {
+export default async function Sidebar03() {
+  const reviewCount = await getDueReviewCount();
+
+  const dashboardRoutes: Route[] = [
+    {
+      id: "home",
+      title: "Home",
+      icon: <Home className="size-4" />,
+      link: "/",
+    },
+    {
+      id: "dashboard",
+      title: "Dashboard",
+      icon: <ChartBar className="size-4" />,
+      link: "/dashboard",
+    },
+    {
+      id: "library",
+      title: "My Library",
+      icon: <BookOpen className="size-4" />,
+      link: "/dashboard/library",
+    },
+    {
+      id: "review",
+      title: "Review",
+      icon: <GraduationCap className="size-4" />,
+      link: "/dashboard/review",
+      badge: reviewCount > 0 ? reviewCount : undefined,
+    },
+    {
+      id: "settings",
+      title: "Settings",
+      icon: <Settings className="size-4" />,
+      link: "#",
+      subs: [
+        { title: "General", link: "#" },
+        { title: "Webhooks", link: "#" },
+        { title: "Custom Fields", link: "#" },
+      ],
+    },
+  ];
+
   return (
     <SidebarProvider>
       <div className="relative flex h-screen w-full">
-        <DashboardSidebar />
+        <DashboardSidebar routes={dashboardRoutes} />
         <SidebarInset className="flex flex-col" />
       </div>
     </SidebarProvider>
