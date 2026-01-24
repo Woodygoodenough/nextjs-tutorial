@@ -1,8 +1,8 @@
 "use server";
 
-import { db, sql } from "@/lib/db/client";
+import { db } from "@/lib/db/client";
 import { userVocab, learningUnit, mwStem } from "@/lib/db/schema";
-import { and, eq, lte, or, isNull } from "drizzle-orm";
+import { and, eq, lte, or, isNull, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireUserId } from "./require-user-id";
 import { getNextReviewDate } from "@/domain/review/scheduler";
