@@ -22,6 +22,38 @@ MW's `meta.stems[]` is the **canonical list of searchable terms** for an entry. 
 
 ---
 
+## Review Session Feature
+
+The application includes a comprehensive **Review Session** feature designed to help users retain vocabulary using a Spaced Repetition System (SRS).
+
+### How It Works
+
+1.  **Dashboard Integration**:
+    *   The "Review" item in the sidebar shows a **notification badge** indicating the number of words currently due for review.
+    *   The system checks the `next_review_at` timestamp for each item in `user_vocab`.
+
+2.  **Review Logic (SRS)**:
+    *   **Algorithm**: The scheduling logic (in `domain/review/scheduler.ts`) determines the next review date based on the user's current `progress` score and whether they remembered the word.
+    *   **Progress Tracking**:
+        *   **Pass ("I remember")**: Increases progress score (default +1).
+        *   **Fail ("I don't remember")**: Decreases progress score (default -1.5), rounded to the nearest integer.
+    *   **Scheduling**:
+        *   Higher progress scores lead to longer intervals between reviews (exponential growth).
+        *   Words not remembered are scheduled for review sooner (often the next day).
+
+3.  **Interactive Flashcards**:
+    *   **Auto-Play Audio**: By default, the pronunciation plays automatically when a card appears.
+    *   **Masking & Reveal**: Users can choose to hide the word title or definitions to test themselves.
+        *   **Title Hidden**: Useful for testing listening comprehension (audio-only cue).
+        *   **Details Hidden**: Useful for testing definition recall based on the word title.
+    *   **Settings**: A settings menu allows toggling "Auto-play audio", "Show word title", and "Show full details".
+
+4.  **Data Persistence**:
+    *   Review results are immediately saved to the database via Server Actions (`lib/actions/review.ts`).
+    *   The user's `last_reviewed_at` and `recent_mastery` status are updated alongside `progress` and `next_review_at`.
+
+---
+
 ## Normalization Rules
 
 ### For Search & Matching (`stem_norm`)
@@ -660,17 +692,27 @@ When a stem matches the headword (normalized), we anchor it to `HWI` **before** 
 
 - **`library.ts`**: Library list + word detail queries (`getUserLibraryUnits`, `getWordDetail`)
 - **`search-widget.ts`**: Search widget queries (`searchExistingUnits`, `searchAndResolve`)
+- **`review.ts`**: Review session actions (`getDueReviewItems`, `submitReview`)
+
+### Domain (`domain/`)
+
+- **`review/scheduler.ts`**: SRS algorithm
+- **`review/reviewSettings.ts`**: Configuration for SRS
 
 ### Components (`components/`)
 
 - **`pronunciation-button.tsx`**: Audio playback component (constructs MW CDN URLs)
 - **`library-unit-card.tsx`**: Library list item card
 - **`library-search.tsx`**: Search widget UI
+- **`review/review-card.tsx`**: Flashcard UI for review sessions
+- **`review/review-settings.tsx`**: Settings sheet for review options
 
-### Pages (`app/dashboard/library/`)
+### Pages (`app/dashboard/`)
 
-- **`(overview)/page.tsx`**: Library list page
-- **`words/[id]/page.tsx`**: Word detail page (full entry group rendering)
+- **`(overview)/page.tsx`**: Dashboard overview
+- **`library/page.tsx`**: Library list page
+- **`library/words/[id]/page.tsx`**: Word detail page
+- **`review/page.tsx`**: Review session page
 
 ### Seed Routes (`app/lib/seed/`)
 

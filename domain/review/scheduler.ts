@@ -45,6 +45,8 @@ export async function getNextReviewDate(
     // ---- 2) Update progress ----
     let nextProgress = progress + (isPass ? passBoost : -failPenalty);
     nextProgress = Math.max(0, nextProgress);
+    // Ensure progress is an integer for DB compatibility
+    nextProgress = Math.round(nextProgress);
 
     // ---- 3) Progress → stability (days) ----
     let stabilityDays =
