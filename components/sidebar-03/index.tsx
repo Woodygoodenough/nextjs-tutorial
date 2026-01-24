@@ -6,7 +6,8 @@ import {
   Settings,
   ChartBar,
   BookOpen,
-  GraduationCap
+  GraduationCap,
+  Puzzle
 } from "lucide-react";
 import type { Route } from "./nav-main";
 
@@ -38,6 +39,12 @@ export default async function Sidebar03() {
       icon: <GraduationCap className="size-4" />,
       link: "/dashboard/review",
       badge: reviewCount > 0 ? reviewCount : undefined,
+    },
+    {
+      id: "crossword",
+      title: "Crossword",
+      icon: <Puzzle className="size-4" />,
+      link: "/dashboard/crossword",
     },
     {
       id: "settings",
