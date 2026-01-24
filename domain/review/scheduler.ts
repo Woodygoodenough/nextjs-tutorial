@@ -1,5 +1,11 @@
 import { ReviewSettings, DEFAULT_REVIEW_SETTINGS } from "@/domain/review/reviewSettings";
 
+/**
+ * Represents the mastery level of a review.
+ * - 1: Passed (Remembered)
+ * - 0: Failed (Forgot)
+ * - null: Not reviewed yet
+ */
 export type Mastery = 0 | 1 | null;
 
 type ReviewResult = {
@@ -7,6 +13,7 @@ type ReviewResult = {
     newProgress: number;
     mastery: Mastery;
 }
+
 function clamp(x: number, lo: number, hi: number): number {
     return Math.max(lo, Math.min(hi, x));
 }
@@ -15,6 +22,16 @@ function addDays(date: Date, days: number): Date {
     const ms = days * 24 * 60 * 60 * 1000;
     return new Date(date.getTime() + ms);
 }
+
+/**
+ * Calculates the next review date and progress score based on the Space Repetition System (SRS) algorithm.
+ *
+ * @param progress Current progress score (integer).
+ * @param mastery Result of the review (1=Pass, 0=Fail).
+ * @param lastReviewedAt Date of the review (usually now).
+ * @param settings SRS configuration settings.
+ * @returns The calculated next review date and updated progress score.
+ */
 export async function getNextReviewDate(
     progress: number,
     mastery: Mastery,
@@ -31,6 +48,7 @@ export async function getNextReviewDate(
         failPenalty,
         failIntervalScale,
     } = settings;
+
     if (mastery === null) {
         return {
             nextReviewAt: addDays(lastReviewedAt, minIntervalDays),
@@ -73,6 +91,10 @@ export async function getNextReviewDate(
     }
 }
 
+/**
+ * Converts raw progress score to a percentage (0-100) for UI display.
+ * Uses an exponential decay function to map unbounded progress to 0-100.
+ */
 export async function getPercentageProgress(progress: number): Promise<number> {
     return 100 * (1 - Math.exp(-0.1 * progress));
 }

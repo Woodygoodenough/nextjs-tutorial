@@ -7,7 +7,8 @@ import {
   ChartBar,
   BookOpen,
   GraduationCap,
-  Puzzle
+  Puzzle,
+  BookHeadphones
 } from "lucide-react";
 import type { Route } from "./nav-main";
 
@@ -45,6 +46,12 @@ export default async function Sidebar03() {
       title: "Crossword",
       icon: <Puzzle className="size-4" />,
       link: "/dashboard/crossword",
+    },
+    {
+      id: "story",
+      title: "AI Story",
+      icon: <BookHeadphones className="size-4" />,
+      link: "/dashboard/story",
     },
     {
       id: "settings",
