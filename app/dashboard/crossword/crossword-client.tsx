@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, CheckCircle2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { CrosswordInputStrip } from "@/components/crossword/input-strip";
 
 type Props = {
   puzzle: CrosswordGrid | null;
@@ -16,13 +17,13 @@ export function CrosswordClient({ puzzle }: Props) {
   const router = useRouter();
 
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
+  // Track direction preference. Defaults to 'across'.
+  // If user selects a cell that only belongs to a 'down' word, we auto-switch.
   const [direction, setDirection] = useState<Direction>('across');
+
   const [inputs, setInputs] = useState<Map<string, string>>(new Map());
   const [revealed, setRevealed] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
-
-  // Focus trap for keyboard input
-  const gridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Reset state when puzzle changes
@@ -65,71 +66,86 @@ export function CrosswordClient({ puzzle }: Props) {
       }
   }
 
+  // Determine active word based on selection and direction
+  let activeWord = null;
+  if (selectedCell) {
+      // Prioritize word in current direction
+      activeWord = placedWords.find(w => {
+          if (w.direction !== direction) return false;
+          if (direction === 'across') {
+              return w.y === selectedCell.y && selectedCell.x >= w.x && selectedCell.x < w.x + w.length;
+          } else {
+              return w.x === selectedCell.x && selectedCell.y >= w.y && selectedCell.y < w.y + w.length;
+          }
+      });
+
+      // If not found in current direction, switch direction (if cell is part of another word)
+      if (!activeWord) {
+          const otherWord = placedWords.find(w => {
+              if (w.direction === 'across') {
+                  return w.y === selectedCell.y && selectedCell.x >= w.x && selectedCell.x < w.x + w.length;
+              } else {
+                  return w.x === selectedCell.x && selectedCell.y >= w.y && selectedCell.y < w.y + w.length;
+              }
+          });
+          if (otherWord) {
+              activeWord = otherWord;
+              // We don't setDirection here to avoid render loops,
+              // but we should probably sync them.
+              // Actually, let's keep direction state separate for explicit toggling.
+              // But for the purpose of "Active Word", we use the found one.
+          }
+      }
+  }
+
+  // Ensure direction matches active word if we found one
+  // (Effectively syncs direction state if we auto-switched)
+  // But doing this in render is bad practice?
+  // Let's rely on handleCellClick to set direction correctly.
+
+  const highlightedCells = new Set<string>();
+  if (activeWord) {
+      for (let i = 0; i < activeWord.length; i++) {
+          const cx = activeWord.direction === 'across' ? activeWord.x + i : activeWord.x;
+          const cy = activeWord.direction === 'across' ? activeWord.y : activeWord.y + i;
+          highlightedCells.add(`${cx},${cy}`);
+      }
+  } else if (selectedCell) {
+      highlightedCells.add(`${selectedCell.x},${selectedCell.y}`);
+  }
+
   const handleCellClick = (x: number, y: number) => {
-    if (!grid[y][x]) return; // Clicked on empty space
+    if (!grid[y][x]) return;
 
     if (selectedCell?.x === x && selectedCell?.y === y) {
-      // Toggle direction if clicking same cell
+      // Toggle direction
       setDirection(prev => prev === 'across' ? 'down' : 'across');
     } else {
+      // Check if this cell belongs to current direction
+      // If not, switch direction
+      const belongsToAcross = placedWords.some(w => w.direction === 'across' && w.y === y && x >= w.x && x < w.x + w.length);
+      const belongsToDown = placedWords.some(w => w.direction === 'down' && w.x === x && y >= w.y && y < w.y + w.length);
+
+      let newDir = direction;
+      if (direction === 'across' && !belongsToAcross && belongsToDown) newDir = 'down';
+      else if (direction === 'down' && !belongsToDown && belongsToAcross) newDir = 'across';
+
       setSelectedCell({ x, y });
-      // Smart direction: if word starts here, or belongs to a word in current direction?
-      // For MVP, just keep current direction unless invalid, then switch?
-      // Or checking if the cell is part of an Across word vs Down word.
-      // Let's rely on toggle for now.
-    }
-
-    // Focus the hidden input or grid to capture keys
-    gridRef.current?.focus();
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!selectedCell) return;
-
-    if (e.key === 'ArrowRight') {
-      moveSelection(1, 0);
-    } else if (e.key === 'ArrowLeft') {
-      moveSelection(-1, 0);
-    } else if (e.key === 'ArrowDown') {
-      moveSelection(0, 1);
-    } else if (e.key === 'ArrowUp') {
-      moveSelection(0, -1);
-    } else if (e.key === 'Backspace') {
-      // Delete current cell and move back
-      updateInput(selectedCell.x, selectedCell.y, '');
-      moveCursorBackward();
-    } else if (e.key.length === 1 && /^[a-zA-Z]$/.test(e.key)) {
-      // Type char
-      updateInput(selectedCell.x, selectedCell.y, e.key.toLowerCase());
-      moveCursorForward();
+      setDirection(newDir);
     }
   };
 
-  const updateInput = (x: number, y: number, char: string) => {
-    const newInputs = new Map(inputs);
-    newInputs.set(`${x},${y}`, char);
-    setInputs(newInputs);
+  const handleInputChange = (x: number, y: number, char: string) => {
+      const newInputs = new Map(inputs);
+      newInputs.set(`${x},${y}`, char.toUpperCase());
+      setInputs(newInputs);
   };
 
-  const moveSelection = (dx: number, dy: number) => {
-    if (!selectedCell) return;
-    let nx = selectedCell.x + dx;
-    let ny = selectedCell.y + dy;
-
-    // Bounds check
-    if (nx >= 0 && nx < width && ny >= 0 && ny < height && grid[ny][nx]) {
-      setSelectedCell({ x: nx, y: ny });
-    }
-  };
-
-  const moveCursorForward = () => {
-    if (direction === 'across') moveSelection(1, 0);
-    else moveSelection(0, 1);
-  };
-
-  const moveCursorBackward = () => {
-    if (direction === 'across') moveSelection(-1, 0);
-    else moveSelection(0, -1);
+  const handleCharSelect = (word: typeof placedWords[0], index: number) => {
+      const cx = word.direction === 'across' ? word.x + index : word.x;
+      const cy = word.direction === 'across' ? word.y : word.y + index;
+      setSelectedCell({ x: cx, y: cy });
+      setDirection(word.direction);
   };
 
   const checkSolution = () => {
@@ -139,7 +155,7 @@ export function CrosswordClient({ puzzle }: Props) {
       for (let x = 0; x < width; x++) {
         if (grid[y][x]) {
           const input = inputs.get(`${x},${y}`);
-          if (input !== grid[y][x]) {
+          if (input !== grid[y][x]?.toUpperCase()) {
             allCorrect = false;
           }
         }
@@ -148,33 +164,8 @@ export function CrosswordClient({ puzzle }: Props) {
     setIsCorrect(allCorrect);
   };
 
-  // Determine highlighted cells (current word)
-  const highlightedCells = new Set<string>();
-  if (selectedCell) {
-    // Find the word that contains selectedCell in the current direction
-    // This requires iterating placedWords
-    const currentWord = placedWords.find(w => {
-        if (w.direction !== direction) return false;
-        if (direction === 'across') {
-            return w.y === selectedCell.y && selectedCell.x >= w.x && selectedCell.x < w.x + w.length;
-        } else {
-            return w.x === selectedCell.x && selectedCell.y >= w.y && selectedCell.y < w.y + w.length;
-        }
-    });
-
-    if (currentWord) {
-        for (let i = 0; i < currentWord.length; i++) {
-            const cx = currentWord.direction === 'across' ? currentWord.x + i : currentWord.x;
-            const cy = currentWord.direction === 'across' ? currentWord.y : currentWord.y + i;
-            highlightedCells.add(`${cx},${cy}`);
-        }
-    } else {
-        // If no word found in this direction (e.g. user selected 'across' on a vertical-only cell),
-        // maybe we should auto-switch direction?
-        // For now, just highlight the cell itself.
-        highlightedCells.add(`${selectedCell.x},${selectedCell.y}`);
-    }
-  }
+  // Determine active word index for scroll
+  // We can pass `isSelected` to input strip.
 
   return (
     <div className="space-y-6">
@@ -192,13 +183,8 @@ export function CrosswordClient({ puzzle }: Props) {
         </div>
 
         <div className="flex flex-col lg:flex-row gap-8 items-start">
-            {/* Grid */}
-            <div
-                className="overflow-auto bg-muted/20 p-4 rounded-lg border outline-none"
-                ref={gridRef}
-                tabIndex={0}
-                onKeyDown={handleKeyDown}
-            >
+            {/* Grid (Read Only / Selection Only) */}
+            <div className="overflow-auto bg-muted/20 p-4 rounded-lg border">
                 <div
                     className="grid gap-[1px] bg-gray-300 dark:bg-gray-700 mx-auto"
                     style={{
@@ -214,8 +200,8 @@ export function CrosswordClient({ puzzle }: Props) {
                             const isHighlighted = highlightedCells.has(key);
                             const inputVal = inputs.get(key);
 
-                            const isError = revealed && inputVal && inputVal !== char;
-                            const isSuccess = revealed && inputVal === char;
+                            const isError = revealed && inputVal && inputVal !== char?.toUpperCase();
+                            const isSuccess = revealed && inputVal === char?.toUpperCase();
 
                             return (
                                 <div
@@ -245,64 +231,77 @@ export function CrosswordClient({ puzzle }: Props) {
                 </div>
             </div>
 
-            {/* Clues */}
+            {/* Input Strips (Clues + Inputs) */}
             <div className="flex-1 grid md:grid-cols-2 gap-6 max-h-[600px] overflow-y-auto">
                 <div>
-                    <h3 className="font-bold mb-3 border-b pb-1 sticky top-0 bg-background">Across</h3>
-                    <ul className="space-y-2 text-sm">
+                    <h3 className="font-bold mb-3 border-b pb-1 sticky top-0 bg-background z-20">Across</h3>
+                    <div className="space-y-4">
                         {placedWords
                             .filter(w => w.direction === 'across')
                             .sort((a, b) => (numbersMap.get(`${a.x},${a.y}`) || 0) - (numbersMap.get(`${b.x},${b.y}`) || 0))
                             .map(w => {
-                                // Highlight clue if active
-                                const isActive = selectedCell && direction === 'across' && highlightedCells.has(`${w.x},${w.y}`); // Simplified check
+                                const isSelected = activeWord === w; // Reference equality should work since data is static per render
+                                // Calculate selected char index relative to word start
+                                let charIdx = null;
+                                if (isSelected && selectedCell) {
+                                    if (w.direction === 'across') charIdx = selectedCell.x - w.x;
+                                    else charIdx = selectedCell.y - w.y;
+                                    // Safety
+                                    if (charIdx < 0 || charIdx >= w.length) charIdx = null;
+                                }
+
                                 return (
-                                    <li
+                                    <CrosswordInputStrip
                                         key={w.word}
-                                        className={cn(
-                                            "p-1 rounded cursor-pointer hover:bg-muted",
-                                            isActive && "bg-blue-100 dark:bg-blue-900/30 font-medium"
-                                        )}
-                                        onClick={() => {
+                                        word={w}
+                                        number={numbersMap.get(`${w.x},${w.y}`) || 0}
+                                        inputs={inputs}
+                                        isSelected={isSelected}
+                                        onSelect={() => {
                                             setSelectedCell({ x: w.x, y: w.y });
-                                            setDirection('across');
-                                            gridRef.current?.focus();
+                                            setDirection(w.direction);
                                         }}
-                                    >
-                                        <span className="font-bold mr-1">{numbersMap.get(`${w.x},${w.y}`)}.</span>
-                                        {w.clue}
-                                    </li>
+                                        onInputChange={handleInputChange}
+                                        selectedCharIndex={charIdx}
+                                        onCharSelect={(idx) => handleCharSelect(w, idx)}
+                                    />
                                 );
                             })}
-                    </ul>
+                    </div>
                 </div>
                 <div>
-                    <h3 className="font-bold mb-3 border-b pb-1 sticky top-0 bg-background">Down</h3>
-                    <ul className="space-y-2 text-sm">
+                    <h3 className="font-bold mb-3 border-b pb-1 sticky top-0 bg-background z-20">Down</h3>
+                    <div className="space-y-4">
                         {placedWords
                             .filter(w => w.direction === 'down')
                             .sort((a, b) => (numbersMap.get(`${a.x},${a.y}`) || 0) - (numbersMap.get(`${b.x},${b.y}`) || 0))
                             .map(w => {
-                                const isActive = selectedCell && direction === 'down' && highlightedCells.has(`${w.x},${w.y}`);
+                                const isSelected = activeWord === w;
+                                let charIdx = null;
+                                if (isSelected && selectedCell) {
+                                    if (w.direction === 'across') charIdx = selectedCell.x - w.x;
+                                    else charIdx = selectedCell.y - w.y;
+                                    if (charIdx < 0 || charIdx >= w.length) charIdx = null;
+                                }
+
                                 return (
-                                    <li
+                                    <CrosswordInputStrip
                                         key={w.word}
-                                        className={cn(
-                                            "p-1 rounded cursor-pointer hover:bg-muted",
-                                            isActive && "bg-blue-100 dark:bg-blue-900/30 font-medium"
-                                        )}
-                                        onClick={() => {
+                                        word={w}
+                                        number={numbersMap.get(`${w.x},${w.y}`) || 0}
+                                        inputs={inputs}
+                                        isSelected={isSelected}
+                                        onSelect={() => {
                                             setSelectedCell({ x: w.x, y: w.y });
-                                            setDirection('down');
-                                            gridRef.current?.focus();
+                                            setDirection(w.direction);
                                         }}
-                                    >
-                                        <span className="font-bold mr-1">{numbersMap.get(`${w.x},${w.y}`)}.</span>
-                                        {w.clue}
-                                    </li>
+                                        onInputChange={handleInputChange}
+                                        selectedCharIndex={charIdx}
+                                        onCharSelect={(idx) => handleCharSelect(w, idx)}
+                                    />
                                 );
                             })}
-                    </ul>
+                    </div>
                 </div>
             </div>
         </div>
