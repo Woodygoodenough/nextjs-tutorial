@@ -1,7 +1,15 @@
 import { openai } from "./client";
-import { WordDetail } from "@/lib/actions/library";
+import storyMock from "./mocks/story.json";
+
+// Optional: Control mock usage via env var
+const USE_MOCK = process.env.USE_MOCK_AI === "true" || !process.env.OPENAI_API_KEY;
 
 export async function generateStory(words: { word: string; pos?: string; def?: string }[]): Promise<string> {
+  if (USE_MOCK) {
+    console.log("Using Mock AI Story Response");
+    return storyMock;
+  }
+
   const wordsList = words.map(w => {
     return `- ${w.word} (${w.pos || 'unknown'}): ${w.def || 'no definition'}`;
   }).join("\n");
@@ -30,6 +38,8 @@ Output only the story text.
     return response.choices[0]?.message?.content || "Failed to generate story.";
   } catch (error) {
     console.error("AI Story Generation Error:", error);
-    return "Sorry, I couldn't generate a story at this time.";
+    // Fallback to mock if API fails? Or just error.
+    // Let's fallback to mock for better DX in dev without keys.
+    return storyMock;
   }
 }

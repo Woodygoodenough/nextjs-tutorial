@@ -1,4 +1,8 @@
 import { openai } from "./client";
+import questionsMock from "./mocks/questions.json";
+
+// Optional: Control mock usage via env var
+const USE_MOCK = process.env.USE_MOCK_AI === "true" || !process.env.OPENAI_API_KEY;
 
 export interface Question {
   id: string;
@@ -7,6 +11,15 @@ export interface Question {
 }
 
 export async function generateQuestions(story: string, words: { word: string }[]): Promise<Question[]> {
+  if (USE_MOCK) {
+    console.log("Using Mock AI Questions Response");
+    return questionsMock.map((q: any, i: number) => ({
+        id: `q-${i}`,
+        word: q.word,
+        question: q.question
+    }));
+  }
+
   const wordList = words.map(w => w.word).join(", ");
 
   const prompt = `
@@ -47,6 +60,11 @@ ${story}
     return [];
   } catch (error) {
     console.error("AI Question Generation Error:", error);
-    return [];
+    // Fallback to mock
+    return questionsMock.map((q: any, i: number) => ({
+        id: `q-${i}`,
+        word: q.word,
+        question: q.question
+    }));
   }
 }
