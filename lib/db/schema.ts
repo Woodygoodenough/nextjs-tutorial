@@ -309,6 +309,66 @@ export const mwPronunciation = pgTable(
     ],
 );
 
+// Normalized definitions: sense structure + definition text items (no raw JSON copy)
+export const mwSense = pgTable(
+    "mw_sense",
+    {
+        senseId: uuid("sense_id").defaultRandom().primaryKey(),
+        entryUuid: uuid("entry_uuid")
+            .notNull()
+            .references(() => mwEntry.entryUuid, { onDelete: "cascade" }),
+
+        /** Which part of the entry this sense belongs to. */
+        scopeType: text("scope_type").notNull(), // ENTRY | DRO
+        /** Polymorphic scope identifier: entry_uuid (ENTRY) or dro_id (DRO). */
+        scopeId: text("scope_id").notNull(),
+
+        /** Verb divider (e.g. "transitive verb") if present in a def block. */
+        vd: text("vd"),
+        /** Sense kind: sense | sen | bs | pseq (minimal set for now). */
+        kind: text("kind").notNull(),
+        /** Sense number label (e.g. "1 a", "b", "(2)") if present. */
+        sn: text("sn"),
+
+        /** Render order + hierarchy depth within the scope. */
+        depth: integer("depth").notNull(),
+        rank: integer("rank").notNull(),
+
+        fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+    },
+    (t) => [
+        uniqueIndex("mw_sense_scope_rank_unique").on(t.entryUuid, t.scopeType, t.scopeId, t.rank),
+        index("mw_sense_entry_idx").on(t.entryUuid),
+        index("mw_sense_scope_idx").on(t.scopeType, t.scopeId),
+    ],
+);
+
+export const mwSenseDt = pgTable(
+    "mw_sense_dt",
+    {
+        dtId: uuid("dt_id").defaultRandom().primaryKey(),
+        senseId: uuid("sense_id")
+            .notNull()
+            .references(() => mwSense.senseId, { onDelete: "cascade" }),
+
+        /** dt element kind: text | vis | ca | uns | snote | ri | bnw | ... */
+        dtType: text("dt_type").notNull(),
+        /** Ordering within the owning sense. */
+        rank: integer("rank").notNull(),
+
+        /** Normalized plain text (for dtType=text, and sometimes others). */
+        text: text("text"),
+        /** Best-effort structured payload for replay (examples, called-also, etc.). */
+        payload: jsonb("payload"),
+
+        fetchedAt: timestamp("fetched_at", { withTimezone: true }).notNull().defaultNow(),
+    },
+    (t) => [
+        uniqueIndex("mw_sense_dt_rank_unique").on(t.senseId, t.rank),
+        index("mw_sense_dt_sense_idx").on(t.senseId),
+    ],
+);
+
 
 export type InsertMwDro = InferInsertModel<typeof mwDro>;
 export type SelectMwDro = InferSelectModel<typeof mwDro>;
@@ -333,6 +393,12 @@ export type SelectMwVr = InferSelectModel<typeof mwVr>;
 
 export type InsertMwIn = InferInsertModel<typeof mwIn>;
 export type SelectMwIn = InferSelectModel<typeof mwIn>;
+
+export type InsertMwSense = InferInsertModel<typeof mwSense>;
+export type SelectMwSense = InferSelectModel<typeof mwSense>;
+
+export type InsertMwSenseDt = InferInsertModel<typeof mwSenseDt>;
+export type SelectMwSenseDt = InferSelectModel<typeof mwSenseDt>;
 
 export type InsertMwEntry = InferInsertModel<typeof mwEntry>;
 export type InsertLexicalGroup = InferInsertModel<typeof lexicalGroup>;

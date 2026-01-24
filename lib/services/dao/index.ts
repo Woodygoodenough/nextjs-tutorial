@@ -18,6 +18,9 @@ export {
     fetchLearningUnitStemInfoByUnitIds,
 } from "@/lib/services/dao/learning-unit-summaries";
 
+// Definitions / senses (normalized from mw_entry.raw_json)
+export { rebuildMwDefinitionsForEntry } from "@/lib/services/dao/definitions-dao";
+
 // User Vocabulary
 export {
     upsertUserVocab,

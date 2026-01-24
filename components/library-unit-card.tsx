@@ -56,7 +56,7 @@ export async function LibraryUnitCard({ unit }: LibraryUnitCardProps) {
             {/* Header: Label and pronunciation button */}
             <div className="flex items-center justify-between gap-2">
               <h3 className="font-semibold text-base truncate flex-1">{unit.label}</h3>
-              <PronunciationButton />
+              <PronunciationButton soundAudio={unit.soundAudio} />
             </div>
 
           {/* Short definition */}

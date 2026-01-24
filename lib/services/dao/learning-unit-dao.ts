@@ -19,7 +19,49 @@ import { db } from "@/lib/db/client";
 import { randomUUID } from "crypto";
 import { morphBaseCandidates } from "@/lib/services/dao/stem-morph";
 import { extractPronunciationsFromPrs, extractVariantsAndInflections, normKey } from "@/lib/services/dao/mw-extract";
-import { fetchLearningUnitsByStemNorm } from "@/lib/services/dao/learning-unit-summaries";
+import { fetchLearningUnitsByStemNorm } from "./learning-unit-summaries";
+import { rebuildMwDefinitionsForEntry } from "./definitions-dao";
+
+function mwDisplayTerm(input: string): string {
+    return input.replace(/\*/g, "").normalize("NFC").trim();
+}
+
+function isUpperAlpha(ch: string | undefined): boolean {
+    return !!ch && ch >= "A" && ch <= "Z";
+}
+
+function isLowerAlpha(ch: string | undefined): boolean {
+    return !!ch && ch >= "a" && ch <= "z";
+}
+
+function canonicalizeLookupFirstLetterCase(display: string): string {
+    const d = mwDisplayTerm(display);
+    if (!d) return "";
+    const lower = d.toLowerCase();
+    return isUpperAlpha(d[0]) ? lower[0]!.toUpperCase() + lower.slice(1) : lower;
+}
+
+function pickStemRankByFirstLetterCase(args: { stems: string[]; lookup: string }): number {
+    const lookupCaseKey = canonicalizeLookupFirstLetterCase(args.lookup);
+    const lookupLower = lookupCaseKey.toLowerCase();
+    const preferUpperFirst = isUpperAlpha(lookupCaseKey[0]);
+
+    const matches = args.stems
+        .map((raw, i) => ({ raw, i, display: mwDisplayTerm(raw), lower: mwDisplayTerm(raw).toLowerCase() }))
+        .filter((x) => x.lower === lookupLower);
+
+    if (matches.length === 0) return -1;
+
+    if (preferUpperFirst) {
+        const upper = matches.find((m) => isUpperAlpha(m.display[0]));
+        if (upper) return upper.i;
+    } else {
+        const lower = matches.find((m) => isLowerAlpha(m.display[0]));
+        if (lower) return lower.i;
+    }
+
+    return matches[0]!.i;
+}
 
 export async function fetchLearningUnitsFromLookupKey(key: string): Promise<Array<SelectLearningUnit>> {
     return await fetchLearningUnitsByStemNorm(key);
@@ -91,15 +133,24 @@ export async function upsertLearningUnit(result: GetUnitResult): Promise<void> {
         const repEntryUuid = result.unit.representativeEntryUuid;
         const repEntry = result.entries.find((e) => e.entryUuid === repEntryUuid);
         const repStems = Array.isArray((repEntry as any)?.stems) ? ((repEntry as any).stems as any[]) : [];
-        const repStemNorms = repStems.filter((s) => typeof s === "string" && s.trim().length > 0).map((s) => normKey(s as string));
-        const desiredStemNorm = normKey(result.unit.createdFromLookupKey);
-        let selectedStemRank = repStemNorms.findIndex((n) => n === desiredStemNorm);
+        const repStemStrings = repStems.filter((s) => typeof s === "string" && s.trim().length > 0) as string[];
+        let selectedStemRank = pickStemRankByFirstLetterCase({
+            stems: repStemStrings,
+            lookup: result.unit.createdFromLookupKey,
+        });
         if (selectedStemRank === -1) {
             // Fallback: if lookup key isn't present as a stem, attach to the first stem.
-            selectedStemRank = repStemNorms.length > 0 ? 0 : -1;
+            selectedStemRank = repStemStrings.length > 0 ? 0 : -1;
         }
         if (selectedStemRank === -1) {
             throw new Error("Cannot create learning_unit: representative entry has no meta.stems[]");
+        }
+
+        // Ensure the unit label matches the exact MW meta.stems[] formatting (case, markers removed).
+        // This keeps the library label consistent with the selected stem.
+        const selectedStemRaw = repStemStrings[selectedStemRank];
+        if (typeof selectedStemRaw === "string" && selectedStemRaw.trim()) {
+            result.unit.label = mwDisplayTerm(selectedStemRaw);
         }
 
         const existingStem = await tx
@@ -185,6 +236,24 @@ export async function upsertLearningUnit(result: GetUnitResult): Promise<void> {
         if (uroRows.length > 0) {
             await tx.insert(mwUro).values(uroRows.map(({ _prs, ...row }) => row) as any).onConflictDoNothing({
                 target: [mwUro.entryUuid, mwUro.rank],
+            });
+        }
+
+        // 2c.5) normalized definitions (def/sseq/sense) for each entry
+        // Must run after DROs are materialized so we can map dro rank → dro_id for scope ids.
+        const droIdByEntry = new Map<string, Map<number, string>>();
+        for (const d of droRows as any[]) {
+            const m = droIdByEntry.get(d.entryUuid) ?? new Map<number, string>();
+            m.set(d.rank, d.droId);
+            droIdByEntry.set(d.entryUuid, m);
+        }
+        for (const e of result.entries) {
+            const fetchedAt = e.fetchedAt ?? new Date();
+            await rebuildMwDefinitionsForEntry(tx, {
+                entryUuid: e.entryUuid,
+                rawJson: e.rawJson,
+                fetchedAt,
+                droIdByRank: droIdByEntry.get(e.entryUuid),
             });
         }
 
@@ -319,13 +388,19 @@ export async function upsertLearningUnit(result: GetUnitResult): Promise<void> {
                     const stemNorm = normKey(stem);
                     const isSelected = e.entryUuid === repEntryUuid && rank === selectedStemRank;
 
-                    const resolve = (k: string) =>
-                        droByNorm.get(k) ??
-                        uroByNorm.get(k) ??
-                        vrByNorm.get(k) ??
-                        inByNorm.get(k) ??
-                        ahwByNorm.get(k) ??
-                        (hwiHwNorm === k ? { kind: "HWI", id: e.entryUuid } : undefined);
+                    const resolve = (k: string) => {
+                        // If this stem matches the headword, anchor to HWI first.
+                        // This prevents "headword-like" stems from being swallowed by VRS/INS, which may not carry prs.
+                        if (hwiHwNorm === k) return { kind: "HWI", id: e.entryUuid };
+                        return (
+                            droByNorm.get(k) ??
+                            uroByNorm.get(k) ??
+                            vrByNorm.get(k) ??
+                            inByNorm.get(k) ??
+                            ahwByNorm.get(k) ??
+                            undefined
+                        );
+                    };
 
                     let anchor = resolve(stemNorm);
                     if (!anchor) {

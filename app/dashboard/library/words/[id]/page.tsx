@@ -3,11 +3,12 @@ import { getWordDetail } from '@/lib/actions/library';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Volume2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getPercentageProgress } from '@/domain/review/scheduler';
 import { cn } from '@/lib/utils';
+import { PronunciationButton } from '@/components/pronunciation-button';
 
 type Props = {
   params: Promise<{
@@ -47,6 +48,77 @@ const formatDate = (date: Date | string | null) => {
   return dateObj.toLocaleDateString();
 };
 
+function mwDisplayTerm(input: string | null | undefined): string {
+  if (!input) return '';
+  return input.replace(/\*/g, '').normalize('NFC').trim();
+}
+
+function renderDtItem(dt: {
+  dtType: string;
+  text: string | null;
+  payload: any | null;
+}) {
+  if (dt.dtType === 'text' && dt.text) {
+    return <p className="text-sm leading-relaxed">{dt.text}</p>;
+  }
+
+  if (dt.dtType === 'vis' && Array.isArray(dt.payload?.examples)) {
+    const examples = dt.payload.examples as Array<{ t: string; aq?: any }>;
+    if (examples.length === 0) return null;
+    return (
+      <div className="space-y-1">
+        <p className="text-xs text-muted-foreground">Examples</p>
+        <ul className="list-disc pl-5 space-y-1">
+          {examples.map((ex, i) => (
+            <li key={i} className="text-sm">
+              {ex.t}
+              {ex.aq?.auth && (
+                <span className="text-xs text-muted-foreground"> — {ex.aq.auth}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  if (dt.dtType === 'ca' && Array.isArray(dt.payload?.cats)) {
+    const intro = typeof dt.payload?.intro === 'string' ? dt.payload.intro : 'called also';
+    const cats = (dt.payload.cats as Array<{ cat: string }>).map((c) => c.cat).filter(Boolean);
+    if (cats.length === 0) return null;
+    return (
+      <p className="text-sm">
+        <span className="text-muted-foreground">{intro} </span>
+        {cats.join(', ')}
+      </p>
+    );
+  }
+
+  if (dt.dtType === 'uns' && Array.isArray(dt.payload?.items)) {
+    const items = dt.payload.items as Array<any>;
+    const lines = items
+      .map((it) => (typeof it?.text === 'string' ? it.text : null))
+      .filter(Boolean) as string[];
+    if (lines.length === 0) return null;
+    return (
+      <div className="space-y-1">
+        <p className="text-xs text-muted-foreground">Usage</p>
+        {lines.map((t, i) => (
+          <p key={i} className="text-sm leading-relaxed">
+            {t}
+          </p>
+        ))}
+      </div>
+    );
+  }
+
+  // Minimal fallback: show dtType badge if we can’t render it yet
+  if (dt.text) {
+    return <p className="text-sm leading-relaxed">{dt.text}</p>;
+  }
+  return null;
+}
+
 export default async function WordDetailPage({ params }: Props) {
   const { id } = await params;
   const word = await getWordDetail(id);
@@ -73,13 +145,13 @@ export default async function WordDetailPage({ params }: Props) {
           <h1 className={`${lusitana.className} text-2xl md:text-3xl font-bold`}>
             {word.label}
           </h1>
-          <Button
+          <PronunciationButton
+            soundAudio={word.selectedStem.soundAudio}
             variant="outline"
             size="icon"
-            aria-label="Pronounce"
-          >
-            <Volume2 className="h-5 w-5" />
-          </Button>
+            className="h-10 w-10"
+            ariaLabel="Pronounce selected stem"
+          />
         </div>
       </div>
 
@@ -107,6 +179,18 @@ export default async function WordDetailPage({ params }: Props) {
             <div>
               <p className="text-sm text-muted-foreground mb-1">Anchor</p>
               <Badge variant="outline">{word.anchorKind ?? "—"}</Badge>
+            </div>
+
+            <div>
+              <p className="text-sm text-muted-foreground mb-1">Selected stem (learning unit)</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium">{mwDisplayTerm(word.selectedStem.stem)}</span>
+                <Badge variant="outline">meta.stems[{word.selectedStem.rank}]</Badge>
+                <Badge variant="secondary">{word.selectedStem.anchorKind}</Badge>
+                {word.selectedStem.fallbackWarning && (
+                  <Badge variant="destructive">FALLBACK</Badge>
+                )}
+              </div>
             </div>
 
             {word.shortdef && (
@@ -157,16 +241,166 @@ export default async function WordDetailPage({ params }: Props) {
         </Card>
       </div>
 
-      {/* Placeholder for future content */}
+      {/* Detailed view: full lexical group (entries + stems) */}
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Additional Information</CardTitle>
+          <CardTitle>Entry group</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
-            More detailed information about this word will be displayed here in the future.
-            This may include full definitions, example sentences, etymology, and more.
-          </p>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              This learning unit belongs to a lexical group with {word.entries.length} entry(ies). The entry containing the selected stem is shown first.
+            </p>
+
+            <div className="space-y-4">
+              {word.entries.map((e) => {
+                const isSelectedEntry = e.entryUuid === word.selectedStem.entryUuid;
+                const entryTitle = mwDisplayTerm(e.titleStem ?? e.hwiHw ?? e.headwordRaw ?? e.stems[0]?.stem ?? 'Entry');
+                const entryIndex = e.groupRank + 1;
+                const visibleStems = e.stems.filter((s) => {
+                  // If the entry title is the headword, don't repeat it in the stems list.
+                  // (We preserve capitalization by using the raw term minus MW '*' markers.)
+                  return mwDisplayTerm(s.stem) !== entryTitle;
+                });
+                return (
+                  <Card key={e.entryUuid} className="border-dashed">
+                    <CardHeader className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <CardTitle className="text-base">
+                          {entryIndex}. {entryTitle}
+                        </CardTitle>
+                        <PronunciationButton
+                          soundAudio={e.hwiSoundAudio}
+                          ariaLabel={`Pronounce ${entryTitle}`}
+                        />
+                        <Badge variant="outline">entry#{e.groupRank}</Badge>
+                        {isSelectedEntry && <Badge>ANCHOR ENTRY</Badge>}
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        {e.metaId && (
+                          <p className="text-xs text-muted-foreground font-mono break-all">
+                            meta.id: {e.metaId}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground font-mono break-all">
+                          entry_uuid: {e.entryUuid}
+                        </p>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {visibleStems.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No stems persisted for this entry yet.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {visibleStems.map((s) => {
+                            const stemDisplay = mwDisplayTerm(s.stem);
+                            const detail = s.anchorText ? mwDisplayTerm(s.anchorText) : null;
+                            const kindLabel =
+                              s.anchorKind === 'URO'
+                                ? 'Undefined run-on'
+                                : s.anchorKind === 'DRO'
+                                  ? 'Defined run-on'
+                                  : s.anchorKind === 'VRS'
+                                    ? 'Variant'
+                                    : s.anchorKind === 'INS'
+                                      ? 'Inflection'
+                                      : s.anchorKind === 'AHW'
+                                        ? 'Alt headword'
+                                        : s.anchorKind === 'HWI'
+                                          ? 'Headword'
+                                          : null;
+
+                            return (
+                            <div
+                              key={s.stemId}
+                              className="flex items-start justify-between gap-4 rounded-md border p-3"
+                            >
+                              <div className="min-w-0">
+                                <div className="font-medium">{stemDisplay}</div>
+                                {kindLabel && (
+                                  <div className="mt-1 text-xs text-muted-foreground">{kindLabel}</div>
+                                )}
+                                {detail && detail !== stemDisplay && (
+                                  <div className="mt-1 text-sm text-muted-foreground">
+                                    {detail}
+                                  </div>
+                                )}
+                                {s.fallbackWarning && (
+                                  <div className="mt-1 text-xs text-muted-foreground">
+                                    No explicit owner found yet; keep as a searchable stem.
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex flex-wrap items-center justify-end gap-1">
+                                <PronunciationButton
+                                  soundAudio={s.soundAudio}
+                                  ariaLabel={`Pronounce ${stemDisplay}`}
+                                />
+                                {s.isUnitStem && <Badge>UNIT</Badge>}
+                                <Badge variant="outline">meta.stems[{s.rank}]</Badge>
+                                <Badge variant="secondary">{s.anchorKind}</Badge>
+                                {s.fallbackWarning && <Badge variant="destructive">FALLBACK</Badge>}
+                              </div>
+                            </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {e.definitions.scopes.length > 0 && (
+                        <div className="pt-4 space-y-4">
+                          {e.definitions.scopes.map((scope) => (
+                            <div key={`${scope.scopeType}:${scope.scopeId}`} className="space-y-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="text-sm font-semibold">
+                                  {scope.scopeType === 'ENTRY'
+                                    ? 'Definitions'
+                                    : scope.label
+                                      ? `Run-on: ${scope.label}`
+                                      : 'Run-on'}
+                                </h4>
+                                <Badge variant="outline">{scope.scopeType}</Badge>
+                              </div>
+
+                              <div className="space-y-3">
+                                {(() => {
+                                  let lastVd: string | null = null;
+                                  return scope.senses.map((s) => {
+                                    const showVd = s.vd && s.vd !== lastVd;
+                                    lastVd = s.vd ?? lastVd;
+                                    const indent = Math.min(6, Math.max(0, s.depth)) * 12;
+                                    return (
+                                      <div key={s.senseId} style={{ marginLeft: indent }} className="space-y-1">
+                                        {showVd && (
+                                          <p className="text-xs text-muted-foreground italic">{s.vd}</p>
+                                        )}
+
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          {s.sn && <span className="text-sm font-semibold">{s.sn}</span>}
+                                          <Badge variant="secondary">{s.kind}</Badge>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                          {s.dt.map((dt) => (
+                                            <div key={dt.dtId}>{renderDtItem(dt)}</div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    );
+                                  });
+                                })()}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
         </CardContent>
       </Card>
     </main>

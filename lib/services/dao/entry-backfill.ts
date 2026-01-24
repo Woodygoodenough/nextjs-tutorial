@@ -17,6 +17,7 @@ import {
 } from "@/lib/db/schema";
 import { morphBaseCandidates } from "@/lib/services/dao/stem-morph";
 import { extractVariantsAndInflections, extractPronunciationsFromPrs, normKey } from "@/lib/services/dao/mw-extract";
+import { rebuildMwDefinitionsForEntry } from "@/lib/services/dao/definitions-dao";
 
 type EntrySnapshot = {
   entryUuid: string;
@@ -193,13 +194,19 @@ function resolveStemAnchors(entry: EntrySnapshot, droRows: any[], uroRows: any[]
 
   const hwiHwNorm = normKey((entry.rawJson as any)?.hwi?.hw ?? "");
 
-  const resolve = (k: string) =>
-    droByNorm.get(k) ??
-    uroByNorm.get(k) ??
-    vrByNorm.get(k) ??
-    inByNorm.get(k) ??
-    ahwByNorm.get(k) ??
-    (hwiHwNorm === k ? { kind: "HWI", id: entry.entryUuid } : undefined);
+  const resolve = (k: string) => {
+    // If this stem matches the headword, anchor to HWI first.
+    // This prevents "headword-like" stems from being swallowed by VRS/INS, which may not carry prs.
+    if (hwiHwNorm === k) return { kind: "HWI", id: entry.entryUuid };
+    return (
+      droByNorm.get(k) ??
+      uroByNorm.get(k) ??
+      vrByNorm.get(k) ??
+      inByNorm.get(k) ??
+      ahwByNorm.get(k) ??
+      undefined
+    );
+  };
 
   return (stemNorm: string) => {
     const direct = resolve(stemNorm);
@@ -269,6 +276,15 @@ export async function backfillEntrySemantics(entryUuid: string): Promise<void> {
     for (const d of dros) droByRank.set(d.rank, d.droId);
     const uroByRank = new Map<number, string>();
     for (const u of uros) uroByRank.set(u.rank, u.uroId);
+
+    // Rebuild normalized definition/sense tables for this entry.
+    // (We map dros[] index → persisted dro_id so DRO-scoped senses have stable scopeIds.)
+    await rebuildMwDefinitionsForEntry(tx, {
+      entryUuid: entry.entryUuid,
+      rawJson: entry.rawJson,
+      fetchedAt: entry.fetchedAt,
+      droIdByRank: droByRank,
+    });
 
     // Rebuild pronunciations for this entry
     await tx.delete(mwPronunciation).where(eq(mwPronunciation.entryUuid, entry.entryUuid));
