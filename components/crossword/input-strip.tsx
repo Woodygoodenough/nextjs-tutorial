@@ -30,14 +30,14 @@ export function CrosswordInputStrip({
   // Scroll into view if selected
   useEffect(() => {
     if (isSelected && containerRef.current) {
-        containerRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      containerRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   }, [isSelected]);
 
   // Focus specific input if char selected
   useEffect(() => {
     if (isSelected && selectedCharIndex !== null && inputRefs.current[selectedCharIndex]) {
-        inputRefs.current[selectedCharIndex]?.focus();
+      inputRefs.current[selectedCharIndex]?.focus();
     }
   }, [isSelected, selectedCharIndex]);
 
@@ -69,28 +69,28 @@ export function CrosswordInputStrip({
     const val = e.target.value.slice(-1).toLowerCase(); // Take last char if multiple typed? or just strictly 1
     // Actually standard input behavior: replace content.
     if (/^[a-zA-Z]$/.test(val) || val === '') {
-        const cx = word.direction === 'across' ? word.x + index : word.x;
-        const cy = word.direction === 'across' ? word.y : word.y + index;
-        onInputChange(cx, cy, val);
-        if (val && index < word.length - 1) {
-            onCharSelect(index + 1);
-        }
+      const cx = word.direction === 'across' ? word.x + index : word.x;
+      const cy = word.direction === 'across' ? word.y : word.y + index;
+      onInputChange(cx, cy, val);
+      if (val && index < word.length - 1) {
+        onCharSelect(index + 1);
+      }
     }
   };
 
   return (
     <div
-        ref={containerRef}
-        className={cn(
-            "p-3 rounded-lg border transition-all cursor-pointer",
-            isSelected ? "border-primary bg-primary/5 shadow-md" : "border-transparent hover:bg-muted"
-        )}
-        onClick={() => {
-            if (!isSelected) {
-                onSelect();
-                onCharSelect(0); // Default to first char
-            }
-        }}
+      ref={containerRef}
+      className={cn(
+        "p-3 rounded-lg border transition-all cursor-pointer",
+        isSelected ? "border-primary bg-primary/5 shadow-md" : "border-transparent hover:bg-muted"
+      )}
+      onClick={() => {
+        if (!isSelected) {
+          onSelect();
+          onCharSelect(0); // Default to first char
+        }
+      }}
     >
       <div className="flex items-start gap-2 mb-2">
         <span className="font-bold text-lg min-w-[1.5rem]">{number}.</span>
@@ -99,22 +99,22 @@ export function CrosswordInputStrip({
 
       <div className="flex flex-wrap gap-1 ml-8">
         {chars.map((char, i) => (
-            <input
-                key={i}
-                ref={el => { inputRefs.current[i] = el }}
-                type="text"
-                className={cn(
-                    "w-8 h-8 text-center uppercase font-bold text-base border rounded bg-background focus:ring-2 focus:ring-primary focus:outline-none",
-                    isSelected ? "border-primary/50" : "border-muted-foreground/30"
-                )}
-                value={char}
-                onChange={(e) => handleChange(e, i)}
-                onKeyDown={(e) => handleKeyDown(e, i)}
-                onFocus={() => {
-                    if (!isSelected) onSelect();
-                    onCharSelect(i);
-                }}
-            />
+          <input
+            key={i}
+            ref={el => { inputRefs.current[i] = el }}
+            type="text"
+            className={cn(
+              "w-10 h-10 text-center uppercase font-bold text-sm border rounded bg-background focus:ring-2 focus:ring-primary focus:outline-none",
+              isSelected ? "border-primary/50" : "border-muted-foreground/30"
+            )}
+            value={char}
+            onChange={(e) => handleChange(e, i)}
+            onKeyDown={(e) => handleKeyDown(e, i)}
+            onFocus={() => {
+              if (!isSelected) onSelect();
+              onCharSelect(i);
+            }}
+          />
         ))}
       </div>
     </div>
