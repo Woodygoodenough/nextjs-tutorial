@@ -97,14 +97,14 @@ export function CrosswordInputStrip({
         <span className="text-sm leading-tight pt-1">{word.clue}</span>
       </div>
 
-      <div className="flex gap-1 ml-8">
+      <div className="flex flex-wrap gap-1 ml-8">
         {chars.map((char, i) => (
             <input
                 key={i}
                 ref={el => { inputRefs.current[i] = el }}
                 type="text"
                 className={cn(
-                    "w-8 h-8 text-center uppercase font-bold border rounded bg-background focus:ring-2 focus:ring-primary focus:outline-none",
+                    "w-8 h-8 text-center uppercase font-bold text-base border rounded bg-background focus:ring-2 focus:ring-primary focus:outline-none",
                     isSelected ? "border-primary/50" : "border-muted-foreground/30"
                 )}
                 value={char}
