@@ -8,7 +8,8 @@ import {
   BookOpen,
   GraduationCap,
   Puzzle,
-  BookHeadphones
+  BookHeadphones,
+  Bot
 } from "lucide-react";
 import type { Route } from "./nav-main";
 
@@ -52,6 +53,12 @@ export default async function Sidebar03() {
       title: "AI Story",
       icon: <BookHeadphones className="size-4" />,
       link: "/dashboard/story",
+    },
+    {
+      id: "conversation",
+      title: "AI Tutor",
+      icon: <Bot className="size-4" />,
+      link: "/dashboard/conversation",
     },
     {
       id: "settings",

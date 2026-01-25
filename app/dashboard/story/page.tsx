@@ -25,23 +25,23 @@ export default async function StoryPage() {
   }
 
   // Generate Story
-  const story = await generateStory(words.map(w => ({ word: w.word, def: w.clue })));
+  const { text: story, audioBase64: storyAudio } = await generateStory(words.map(w => ({ word: w.word, def: w.clue })));
 
   // Generate Questions
   const questions = await generateQuestions(story, words.map(w => ({ word: w.word })));
 
   return (
-    <main className="w-full max-w-4xl mx-auto">
+    <main className="w-full max-w-7xl mx-auto px-4">
       <div className="mb-8">
         <h1 className={`${lusitana.className} text-2xl md:text-3xl font-bold mb-2`}>
           AI Story Review
         </h1>
         <p className="text-muted-foreground">
-          Read the story containing your review words, then answer the questions.
+          Listen to the story and answer questions to test your comprehension.
         </p>
       </div>
 
-      <StorySessionClient story={story} questions={questions} />
+      <StorySessionClient story={story} storyAudio={storyAudio ?? undefined} questions={questions} />
     </main>
   );
 }
